@@ -1,19 +1,10 @@
-use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
-use serde::Deserialize;
+use actix_web::{App, HttpServer};
 
+mod api_structures;
 mod auth;
-mod claim;
-mod ids;
-mod jwt;
-
-#[post("/game/join")]
-async fn join_lobby() -> impl Responder {
-    todo!();
-}
-#[post("/game/create")]
-async fn create_lobby() -> impl Responder {
-    todo!();
-}
+mod database;
+mod game_session;
+mod user;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
