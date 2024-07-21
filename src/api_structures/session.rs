@@ -1,6 +1,9 @@
-use crate::{api_structures::id::Id, user};
-
 use super::errors::FactoryError;
+use crate::{api_structures::id::Id, user};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Player {
     is_host: bool,
     id: Id,
@@ -8,7 +11,7 @@ pub struct Player {
 }
 
 impl Player {
-    fn new(is_host: bool, id: Id, username: &str) -> Result<Self, FactoryError> {
+    pub fn new(is_host: bool, id: Id, username: &str) -> Result<Self, FactoryError> {
         if let Some(valid_id) = id.verify_user_id() {
             return Ok(Self {
                 is_host: is_host,
@@ -16,11 +19,26 @@ impl Player {
                 username: String::from(username),
             });
         } else {
-            Err(FactoryError::InvalidIdVarient())
+            return Err(FactoryError::InvalidIdVarient);
         }
     }
 }
+
+#[derive(Serialize, Deserialize)]
 pub struct Session {
     id: Id,
-    players: Vec,
+    players: Vec<Player>,
+}
+
+impl Session {
+    pub fn new() -> Self {
+        Self {
+            id: Id::SessionId(Uuid::new_v4()),
+            players: Vec::new(),
+        }
+    }
+
+    pub fn add_player(&mut self, player: Player) {
+        self.players.push(player);
+    }
 }

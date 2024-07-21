@@ -4,15 +4,14 @@
 // niestety ten system jest nienajlepszy ale pozwala nam
 // na to ze bendziemy mielei pewnosc ze ID jest specyficznego typu
 
-// system akutalnie dla testow jest na bazie I32
-// TODO:
-// Zmenic system id na UUID4 dla uniwersalonsci
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-use serde::de::value;
+#[derive(Serialize, Deserialize, Clone)]
 
 pub enum Id {
-    UserId(i32),
-    SessionId(i32),
+    UserId(Uuid),
+    SessionId(Uuid),
 }
 
 impl Id {
