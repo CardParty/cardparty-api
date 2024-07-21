@@ -1,0 +1,71 @@
+Styleguide
+
+struct - PascalCase
+enum - PascalCase
+enum variant - PascalCase
+traits - PascalCase
+
+Statyczne varsy sa const takie ktore zyja do konca programu mało ich
+sie używa ale śa przypadki
+static - Pascal_Snake_Case
+const - CAPITAL_SNAKE_CASE
+let / variable - snake_case
+
+functions - snake_case
+methods - snake_case
+
+
+
+jak sie implikuje dla jakiegos strukta cos to dawac to pod deklaracja struktury
+
+
+PRZYKŁAD ZŁEGO STYLU:
+
+struct MyScruct1 {
+  feild_1: i32,
+}
+
+struct MyScruct2 {
+  feild_1: i32,
+}
+
+impl MyScruct1 {
+  fn some_func() {
+    todo!();
+  }
+}
+
+impl MyScruct2 {
+  fn some_func() {
+    todo!();
+  }
+}
+
+PRZYKŁAD DOBREGO STYLU:
+
+struct MyScruct1 {
+  feild_1: i32,
+}
+
+impl MyScruct1 {
+  fn some_func() {
+    todo!();
+  }
+}
+
+struct MyScruct2 {
+  feild_1: i32,
+}
+
+impl MyScruct2 {
+  fn some_func() {
+    todo!();
+  }
+}
+
+
+wow so czytelne
+
+ogolnie pisz kod jakbys musiał wrocic 
+do niego za 10 lat i zrozumiec co sie 
+w nim dzieje na 100%
