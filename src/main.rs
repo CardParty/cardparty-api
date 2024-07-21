@@ -3,7 +3,7 @@ use actix_web::{App, HttpServer};
 mod api_structures;
 mod auth;
 mod database;
-mod game_session;
+mod scopes;
 mod user;
 
 #[actix_web::main]
