@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 
 pub enum Id {
     UserId(Uuid),
@@ -25,6 +25,13 @@ impl Id {
         match self {
             Id::UserId(_) => None,
             Id::SessionId(_) => Some(self),
+        }
+    }
+
+    pub fn to_string(self) -> String {
+        match self {
+            Id::SessionId(id) => id.to_string(),
+            Id::UserId(id) => id.to_string(),
         }
     }
 }

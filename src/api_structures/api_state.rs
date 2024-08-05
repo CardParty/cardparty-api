@@ -1,7 +1,5 @@
 use crate::api_structures::session::Session;
 
-use super::session;
-
 // Globalny stan api
 // dodawac tu tylko najważniejsze żeczy ktore MUSZĄ byc w globalnym stanie
 pub struct ApiState {

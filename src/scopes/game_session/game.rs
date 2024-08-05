@@ -19,7 +19,7 @@ struct CreateSession {
 }
 
 #[derive(Serialize, Deserialize)]
-struct SessionInfo {}
+struct SessionInfo {} // deprectaed
 
 #[post("/create")]
 async fn create_game(
