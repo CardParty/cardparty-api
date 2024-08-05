@@ -11,7 +11,6 @@ mod api_structures;
 mod auth;
 mod database;
 mod scopes;
-mod user;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

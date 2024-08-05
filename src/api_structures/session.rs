@@ -1,5 +1,5 @@
 use super::errors::FactoryError;
-use crate::{api_structures::id::Id, user};
+use crate::{api_structures::id::Id};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
