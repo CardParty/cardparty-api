@@ -1,7 +1,18 @@
-use crate::api_structures::id::Id;
+use actix::fut::ok;
+use actix::{Actor, Addr};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::api_structures::id::*;
+use crate::api_structures::messages::{GetHostId, VerifyExistance};
 use crate::api_structures::session::Session;
+
 pub struct SessionManager {
-    pub sessions: Vec<Session>,
+    pub sessions: Vec<Addr<Session>>,
+}
+
+enum SessionManagerError {
+    UserSessionInstanceAlreadyExists,
 }
 
 impl SessionManager {
@@ -10,21 +21,23 @@ impl SessionManager {
             sessions: Vec::new(),
         }
     }
-}
 
-impl SessionManager {
-    pub fn create_session(&mut self, session: Session) {
-        self.sessions.push(session)
-    }
-    pub fn join_session(&self, unvalid_session_id: Id) {
-        if let Some(id) = unvalid_session_id.verify_session_id() {
-        } else {
-            log::error!("Failed To Join session")
+    pub async fn init_session(
+        &mut self,
+        host_id: UserId,
+        username: String,
+    ) -> Result<(), SessionManagerError> {
+        for session in &self.sessions {
+            let session_host_id = session
+                .send(GetHostId())
+                .await
+                .expect("getting host id failed");
+            if Uuid::parse_str(&session_host_id).expect("parsing uuid failed") == host_id {
+                return Err(SessionManagerError::UserSessionInstanceAlreadyExists);
+            }
         }
-    }
-    pub fn verify_session() {
-        todo!()
-    }
 
-    pub fn activate_session() {}
+        &mut self.sessions.push(Session::init(host_id, username));
+        Ok(())
+    }
 }

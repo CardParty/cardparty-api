@@ -16,7 +16,6 @@ mod api_structures;
 mod auth;
 mod database;
 mod scopes;
-mod user;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -27,7 +26,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .wrap(Logger::default())
-            .app_data(Data::new(Arc::new(Mutex::new(ApiState::new()))))
+            .app_data(Data::new(Mutex::new(ApiState::new())))
             .service(game_scope())
     })
     .bind(("127.0.0.1", 8080))?

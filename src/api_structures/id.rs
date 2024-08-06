@@ -7,31 +7,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+trait Id {}
 
-pub enum Id {
-    UserId(Uuid),
-    SessionId(Uuid),
-}
+pub type UserId = Uuid;
+pub type SessionId = Uuid;
 
-impl Id {
-    pub fn verify_user_id(self) -> Option<Self> {
-        match self {
-            Id::UserId(_) => Some(self),
-            Id::SessionId(_) => None,
-        }
-    }
-    pub fn verify_session_id(self) -> Option<Self> {
-        match self {
-            Id::UserId(_) => None,
-            Id::SessionId(_) => Some(self),
-        }
-    }
-
-    pub fn to_string(self) -> String {
-        match self {
-            Id::SessionId(id) => id.to_string(),
-            Id::UserId(id) => id.to_string(),
-        }
-    }
-}
+impl Id for Uuid {}

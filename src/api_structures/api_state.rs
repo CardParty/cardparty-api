@@ -1,18 +1,15 @@
-use crate::api_structures::session::Session;
+use crate::api_structures::managers::session_manager::SessionManager;
 
 // Globalny stan api
 // dodawac tu tylko najważniejsze żeczy ktore MUSZĄ byc w globalnym stanie
 pub struct ApiState {
-    sessions: Vec<Session>,
+    pub session_manager: SessionManager,
 }
 
 impl ApiState {
     pub fn new() -> Self {
         Self {
-            sessions: Vec::new(),
+            session_manager: SessionManager::new(),
         }
-    }
-    pub fn add_session(&mut self, session: Session) {
-        self.sessions.push(session)
     }
 }
