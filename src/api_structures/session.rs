@@ -1,4 +1,4 @@
-use std::vec;
+use std::{clone, ops::Add, vec};
 
 use crate::api_structures::card_game::deck::Deck;
 use crate::api_structures::id::*;
@@ -9,9 +9,15 @@ use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::messages::{GetHostId, VerifyExistance};
+use super::messages::{AddPlayer, GetHostId, GetSessionId, VerifyExistance};
+#[derive(Debug)]
+pub enum SessionError {
+    FailedToAddPlayer,
+    PlayerAlreadyInSession,
+    FailedToAddHostToSession,
+}
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct Player {
     username: String,
     id: UserId,
@@ -33,33 +39,45 @@ pub struct SessionConnection {
     user_id: UserId,
 }
 
+impl SessionConnection {
+    pub fn new(user_id: UserId, session: Addr<Session>) -> Self {
+        Self { user_id, session }
+    }
+}
+
 impl Actor for SessionConnection {
     type Context = ws::WebsocketContext<Self>;
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection {
-    fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        if let Ok(websocket_message) = item {
-            match websocket_message {
-                ws::Message::Text(data) => {
-                    let string = data.parse::<String>().expect("string parsing fucked up");
-                    self.session.do_send(TestMessage(string))
-                }
-                ws::Message::Binary(_) => log::info!("bin"),
-                ws::Message::Continuation(_) => log::info!("cont"),
-                ws::Message::Ping(_) => ctx.pong(b"pong"),
-                ws::Message::Pong(_) => ctx.ping(b"ping"),
-                ws::Message::Close(_) => log::info!("close"),
-                ws::Message::Nop => log::info!("nop"),
+    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        match msg {
+            Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
+            Ok(ws::Message::Text(text)) => {
+                println!("Received: {}", text);
+                self.session
+                    .do_send(TestMessage(text.parse::<String>().unwrap()));
             }
+            Ok(ws::Message::Binary(bin)) => println!("Received binary: {:?}", bin),
+            _ => (),
         }
     }
 }
+
+impl Handler<TestMessage> for SessionConnection {
+    type Result = ();
+
+    fn handle(&mut self, msg: TestMessage, ctx: &mut Self::Context) {
+        ctx.text(msg.0);
+    }
+}
+#[derive(Clone)]
 pub struct Session {
     pub id: SessionId,
     pub connections: Vec<Addr<SessionConnection>>,
     pub host_id: Uuid,
     pub players: Vec<Player>,
+    pub admin_token: Uuid,
 }
 
 impl Actor for Session {
@@ -67,14 +85,18 @@ impl Actor for Session {
 }
 
 impl Session {
-    pub fn init(host_id: UserId, username: String) -> Addr<Self> {
-        Self {
-            id: Uuid::new_v4(),
+    pub async fn init(host_id: UserId, username: String) -> (Addr<Self>, SessionId) {
+        let id = Uuid::new_v4();
+        let addr = Self {
+            id: id,
             host_id: host_id,
             connections: Vec::new(),
-            players: vec![Player::new(host_id, username, true)],
+            players: Vec::new(),
+            admin_token: Uuid::new_v4(),
         }
-        .start()
+            .start();
+
+        return (addr, id);
     }
 }
 
@@ -88,6 +110,7 @@ impl Handler<TestMessage> for Session {
 impl Handler<VerifyExistance> for Session {
     type Result = bool;
     fn handle(&mut self, msg: VerifyExistance, ctx: &mut Self::Context) -> Self::Result {
+        log::info!("verify existence ran on: {}", &self.id);
         self.id == msg.0
     }
 }
@@ -96,5 +119,26 @@ impl Handler<GetHostId> for Session {
     type Result = String;
     fn handle(&mut self, msg: GetHostId, ctx: &mut Self::Context) -> Self::Result {
         self.host_id.to_string()
+    }
+}
+
+impl Handler<AddPlayer> for Session {
+    type Result = Result<SessionConnection, SessionError>;
+    fn handle(&mut self, msg: AddPlayer, ctx: &mut Self::Context) -> Self::Result {
+        self.players
+            .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
+        log::info!(
+            "Added new player with id: {} to session: {}",
+            &msg.id,
+            self.id
+        );
+        Ok(SessionConnection::new(msg.id, msg.session_addr))
+    }
+}
+
+impl Handler<GetSessionId> for Session {
+    type Result = String;
+    fn handle(&mut self, msg: GetSessionId, ctx: &mut Self::Context) -> Self::Result {
+        return self.id.to_string();
     }
 }

@@ -1,32 +1,36 @@
+use std::ops::Add;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use actix::fut::ok;
 use actix::{Actor, Addr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api_structures::id::*;
-use crate::api_structures::messages::{GetHostId, VerifyExistance};
-use crate::api_structures::session::Session;
+use crate::api_structures::messages::{AddPlayer, GetHostId, GetSessionId, VerifyExistance};
+use crate::api_structures::session::{Session, SessionConnection, SessionError};
 
 pub struct SessionManager {
     pub sessions: Vec<Addr<Session>>,
 }
-
-enum SessionManagerError {
+#[derive(Debug)]
+pub enum SessionManagerError {
     UserSessionInstanceAlreadyExists,
+    NoActiveSessions,
 }
 
 impl SessionManager {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {
             sessions: Vec::new(),
-        }
+        }))
     }
 
     pub async fn init_session(
         &mut self,
         host_id: UserId,
         username: String,
-    ) -> Result<(), SessionManagerError> {
+    ) -> Result<SessionId, SessionManagerError> {
         for session in &self.sessions {
             let session_host_id = session
                 .send(GetHostId())
@@ -37,7 +41,41 @@ impl SessionManager {
             }
         }
 
-        &mut self.sessions.push(Session::init(host_id, username));
-        Ok(())
+        let (addr, id) = Session::init(host_id, username).await;
+
+        self.sessions.push(addr.clone());
+        println!("sessions 1 {:p} ", &self.sessions);
+        log::info!("created session: {}", id);
+        Ok(id)
+    }
+
+    pub async fn join_session(
+        &mut self,
+        session_id: SessionId,
+        user_id: UserId,
+        username: String,
+    ) -> Option<SessionConnection> {
+        println!("sessions 2 {:p} ", &self.sessions);
+        for session in &self.sessions {
+            let session_id_res = session
+                .send(GetSessionId())
+                .await
+                .expect("getting session id failed");
+            if Uuid::parse_str(&session_id_res).expect("parsing uuid failed") == session_id {
+                let conn = session
+                    .send(AddPlayer {
+                        id: user_id,
+                        username: username,
+                        is_host: false,
+                        session_addr: session.clone(),
+                    })
+                    .await
+                    .unwrap()
+                    .unwrap();
+
+                return Some(conn);
+            }
+        }
+        None
     }
 }
