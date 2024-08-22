@@ -103,7 +103,7 @@ impl Session {
 impl Handler<TestMessage> for Session {
     type Result = ();
     fn handle(&mut self, msg: TestMessage, ctx: &mut Self::Context) -> Self::Result {
-        log::info!("WEBSOCKET KINDA WORKS:{:#?}", msg.0)
+        println!("hander of session got: {:#?}", msg);
     }
 }
 
