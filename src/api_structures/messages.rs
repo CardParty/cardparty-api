@@ -5,7 +5,7 @@ use super::{
     session::Session,
 };
 use crate::api_structures::session::{SessionConnection, SessionError}; // Import the missing type SessionConnection
-                                                                       // TEMPLATE
+// TEMPLATE
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub struct TEMPLATE_DONT_USE();

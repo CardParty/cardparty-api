@@ -1,6 +1,6 @@
 use std::ops::Add;
 use std::str::FromStr;
-
+use std::sync::{Arc, Mutex};
 use actix::fut::ok;
 use actix::{Actor, Addr};
 use serde::{Deserialize, Serialize};
@@ -20,10 +20,10 @@ pub enum SessionManagerError {
 }
 
 impl SessionManager {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {
             sessions: Vec::new(),
-        }
+        }))
     }
 
     pub async fn init_session(
@@ -43,7 +43,8 @@ impl SessionManager {
 
         let (addr, id) = Session::init(host_id, username).await;
 
-        &mut self.sessions.push(addr);
+        self.sessions.push(addr.clone());
+        println!("sessions 1 {:p} ", &self.sessions);
         log::info!("created session: {}", id);
         Ok(id)
     }
@@ -54,21 +55,27 @@ impl SessionManager {
         user_id: UserId,
         username: String,
     ) -> Option<SessionConnection> {
-        if let Some(addr) = self.sessions.get(0) {
-            let conn = addr
-                .send(AddPlayer {
-                    id: user_id,
-                    username: username,
-                    is_host: true,
-                    session_addr: addr.to_owned(),
-                })
+        println!("sessions 2 {:p} ", &self.sessions);
+        for session in &self.sessions {
+            let session_id_res = session
+                .send(GetSessionId())
                 .await
-                .unwrap()
-                .unwrap();
+                .expect("getting session id failed");
+            if Uuid::parse_str(&session_id_res).expect("parsing uuid failed") == session_id {
+                let conn = session
+                    .send(AddPlayer {
+                        id: user_id,
+                        username: username,
+                        is_host: false,
+                        session_addr: session.clone(),
+                    })
+                    .await
+                    .unwrap()
+                    .unwrap();
 
-            return Some(conn);
-        } else {
-            None
+                return Some(conn);
+            }
         }
+        None
     }
 }

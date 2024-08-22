@@ -94,7 +94,7 @@ impl Session {
             players: Vec::new(),
             admin_token: Uuid::new_v4(),
         }
-        .start();
+            .start();
 
         return (addr, id);
     }
