@@ -1,10 +1,9 @@
-// Zasady ID's niestety jestem zbyt leniwy zeby robic system macro
-// za kazdym razem jak sie dodaje nowy typ ID do ENUM ID
-// to trzebda dodac funkcje weryfikujaca
-// niestety ten system jest nienajlepszy ale pozwala nam
-// na to ze bendziemy mielei pewnosc ze ID jest specyficznego typu
+// Zasady ID's niestety jestem zbyt leniwy, żeby robić system macro
+// za każdym razem jak się dodaje nowy typ ID do ENUM ID
+// to trzeba dodać funkcje weryfikująca
+// niestety ten system jest nie najlepszy, ale pozwala nam
+// na to, że będziemy mieli pewność z ID jest specyficznego typu
 
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 trait Id {}

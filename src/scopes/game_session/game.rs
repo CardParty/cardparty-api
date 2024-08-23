@@ -1,20 +1,16 @@
 use crate::api_structures::{
     api_state::ApiState,
     id::*,
-    managers::session_manager,
     messages::ConnectWithSession,
-    session::{Player, Session, SessionConnection},
 };
-use actix::fut::stream;
 use actix_web::{
     post,
-    web::{self, ServiceConfig},
+    web::{self},
     HttpRequest, HttpResponse, Responder, Scope,
 };
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use std::{
-    ops::Deref,
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
@@ -37,7 +33,7 @@ struct JoinSession {
 }
 
 // #[derive(Serialize, Deserialize)]
-// struct SessionInfo {} // deprectaed
+// struct SessionInfo {} // deprecated
 
 #[post("/create")]
 async fn create_game(
@@ -76,7 +72,7 @@ async fn join_game(
     let username: String = query.username.clone();
 
 
-    match session_manager
+    return match session_manager
         .join_session(session_id, user_id, username)
         .await
     {
@@ -85,11 +81,11 @@ async fn join_game(
                 .start_with_addr()
                 .expect("pussi bomboclatt");
             addr.do_send(ConnectWithSession(addr.clone()));
-            return Ok(resp);
+            Ok(resp)
         }
 
         None => {
-            return Ok(HttpResponse::BadRequest().finish());
+            Ok(HttpResponse::BadRequest().finish())
         }
     }
 }

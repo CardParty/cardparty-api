@@ -1,12 +1,11 @@
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::{
-    web::{scope, Data},
+    web::{Data},
     App, HttpServer,
 };
 use dotenv::dotenv;
 use env_logger::Env;
-use log::info;
 use std::sync::{Arc, Mutex};
 
 use api_structures::api_state::ApiState;

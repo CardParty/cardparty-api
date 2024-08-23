@@ -1,14 +1,10 @@
-use actix::fut::ok;
-use actix::{Actor, Addr};
-use serde::{Deserialize, Serialize};
-use std::ops::Add;
-use std::str::FromStr;
+use actix::{Addr};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use crate::api_structures::id::*;
-use crate::api_structures::messages::{AddPlayer, GetHostId, GetSessionId, VerifyExistance};
-use crate::api_structures::session::{Session, SessionConnection, SessionError};
+use crate::api_structures::messages::{AddPlayer, GetHostId, GetSessionId};
+use crate::api_structures::session::{Session, SessionConnection};
 
 pub struct SessionManager {
     pub sessions: Vec<Addr<Session>>,
@@ -62,7 +58,7 @@ impl SessionManager {
                 let conn = session
                     .send(AddPlayer {
                         id: user_id,
-                        username: username,
+                        username,
                         is_host: false,
                         session_addr: session.clone(),
                     })

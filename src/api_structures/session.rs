@@ -1,25 +1,21 @@
-use std::io::SeekFrom;
-use std::{clone, ops::Add, vec};
-
 use crate::api_structures::id::*;
 use crate::api_structures::messages::TestMessage;
-use crate::api_structures::{card_game::deck::Deck, messages::BrodcastMessage};
-use actix::{Actor, Addr, Context, Handler, Message, StreamHandler};
-use actix_web::web::{self, Data};
+use crate::api_structures::{messages::BroadcastMessage};
+use actix::{Actor, Addr, Context, Handler, StreamHandler};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::messages::{
     AddConnection, AddPlayer, ConnectWithSession, GetHostId, GetSessionId, SendToClient,
-    VerifyExistance,
+    VerifyExistence,
 };
 #[derive(Debug)]
 pub enum SessionError {
     FailedToAddPlayer,
     PlayerAlreadyInSession,
     FailedToAddHostToSession,
-    BrodcastMessageFailure,
+    BroadcastMessageFailure,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -48,8 +44,8 @@ pub struct SessionConnection {
 impl SessionConnection {
     pub fn new(user_id: UserId, session: Addr<Session>) -> Self {
         Self {
-            user_id: user_id,
-            session: session,
+            user_id,
+            session,
             id: Uuid::new_v4(),
         }
     }
@@ -75,7 +71,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
 
                 if let Some(str) = split.first() {
                     if str.starts_with("send_all") {
-                        self.session.do_send(BrodcastMessage(split[1..].join(" ")));
+                        self.session.do_send(BroadcastMessage(split[1..].join(" ")));
                     } else {
                         self.session
                             .do_send(TestMessage(text.parse::<String>().unwrap()));
@@ -108,7 +104,7 @@ impl Handler<SendToClient> for SessionConnection {
 impl Handler<ConnectWithSession> for SessionConnection {
     type Result = ();
 
-    fn handle(&mut self, msg: ConnectWithSession, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: ConnectWithSession, _ctx: &mut Self::Context) -> Self::Result {
         self.session.do_send(AddConnection(msg.0))
     }
 }
@@ -126,11 +122,11 @@ impl Actor for Session {
 }
 
 impl Session {
-    pub async fn init(host_id: UserId, username: String) -> (Addr<Self>, SessionId) {
+    pub async fn init(host_id: UserId, _username: String) -> (Addr<Self>, SessionId) {
         let id = Uuid::new_v4();
         let addr = Self {
-            id: id,
-            host_id: host_id,
+            id,
+            host_id,
             connections: Vec::new(),
             players: Vec::new(),
             admin_token: Uuid::new_v4(),
@@ -143,27 +139,27 @@ impl Session {
 
 impl Handler<TestMessage> for Session {
     type Result = ();
-    fn handle(&mut self, msg: TestMessage, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: TestMessage, _ctx: &mut Self::Context) -> Self::Result {
     }
 }
 
-impl Handler<VerifyExistance> for Session {
+impl Handler<VerifyExistence> for Session {
     type Result = bool;
-    fn handle(&mut self, msg: VerifyExistance, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: VerifyExistence, _ctx: &mut Self::Context) -> Self::Result {
         self.id == msg.0
     }
 }
 
 impl Handler<GetHostId> for Session {
     type Result = String;
-    fn handle(&mut self, msg: GetHostId, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: GetHostId, _ctx: &mut Self::Context) -> Self::Result {
         self.host_id.to_string()
     }
 }
 
 impl Handler<AddPlayer> for Session {
     type Result = Result<SessionConnection, SessionError>;
-    fn handle(&mut self, msg: AddPlayer, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: AddPlayer, _ctx: &mut Self::Context) -> Self::Result {
         self.players
             .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
         let conn = SessionConnection::new(msg.id, msg.session_addr);
@@ -173,14 +169,14 @@ impl Handler<AddPlayer> for Session {
 
 impl Handler<GetSessionId> for Session {
     type Result = String;
-    fn handle(&mut self, msg: GetSessionId, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: GetSessionId, _ctx: &mut Self::Context) -> Self::Result {
         return self.id.to_string();
     }
 }
-impl Handler<BrodcastMessage> for Session {
+impl Handler<BroadcastMessage> for Session {
     type Result = ();
 
-    fn handle(&mut self, msg: BrodcastMessage, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: BroadcastMessage, _ctx: &mut Self::Context) -> Self::Result {
         for conn in &self.connections {
             conn.do_send(SendToClient(msg.0.clone()))
         }
@@ -190,7 +186,7 @@ impl Handler<BrodcastMessage> for Session {
 impl Handler<AddConnection> for Session {
     type Result = ();
 
-    fn handle(&mut self, msg: AddConnection, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: AddConnection, _ctx: &mut Self::Context) -> Self::Result {
         self.connections.push(msg.0);
     }
 }

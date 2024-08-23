@@ -8,7 +8,7 @@ use crate::api_structures::session::{SessionConnection, SessionError}; // Import
                                                                        // TEMPLATE
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
-pub struct TEMPLATE_DONT_USE();
+pub struct TemplateDontUse();
 
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
@@ -16,7 +16,7 @@ pub struct TestMessage(pub String);
 
 #[derive(Message, Debug)]
 #[rtype(result = "bool")]
-pub struct VerifyExistance(pub SessionId);
+pub struct VerifyExistence(pub SessionId);
 
 #[derive(Message, Debug)]
 #[rtype(result = "String")]
@@ -37,7 +37,7 @@ pub struct GetSessionId();
 
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
-pub struct BrodcastMessage(pub String);
+pub struct BroadcastMessage(pub String);
 
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
