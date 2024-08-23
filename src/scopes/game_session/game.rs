@@ -75,11 +75,6 @@ async fn join_game(
     let user_id: UserId = query.user_id;
     let username: String = query.username.clone();
 
-    log::info!(
-        "Attempting to join session {} for user {}",
-        session_id,
-        user_id
-    );
 
     match session_manager
         .join_session(session_id, user_id, username)
@@ -94,7 +89,6 @@ async fn join_game(
         }
 
         None => {
-            println!("nigga boom");
             return Ok(HttpResponse::BadRequest().finish());
         }
     }

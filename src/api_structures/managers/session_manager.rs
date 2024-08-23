@@ -44,8 +44,6 @@ impl SessionManager {
         let (addr, id) = Session::init(host_id, username).await;
 
         self.sessions.push(addr.clone());
-        println!("sessions 1 {:p} ", &self.sessions);
-        log::info!("created session: {}", id);
         Ok(id)
     }
 
@@ -55,7 +53,6 @@ impl SessionManager {
         user_id: UserId,
         username: String,
     ) -> Option<SessionConnection> {
-        println!("sessions 2 {:p} ", &self.sessions);
         for session in &self.sessions {
             let session_id_res = session
                 .send(GetSessionId())

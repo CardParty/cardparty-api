@@ -64,7 +64,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
         match msg {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Text(text)) => {
-                println!("Received: {}", text);
 
                 let split: Vec<String> = text
                     .parse::<String>()
@@ -73,25 +72,19 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                     .map(|str| String::from(str))
                     .collect();
 
-                println!("Split: {:#?}", split);
 
                 if let Some(str) = split.first() {
-                    println!("got first");
                     if str.starts_with("send_all") {
-                        println!("send_all detected");
                         self.session.do_send(BrodcastMessage(split[1..].join(" ")));
                     } else {
-                        println!("send_all not detected");
                         self.session
                             .do_send(TestMessage(text.parse::<String>().unwrap()));
                     }
                 } else {
-                    println!("error with getting first object the websocket string");
                     self.session
                         .do_send(TestMessage(text.parse::<String>().unwrap()));
                 }
             }
-            Ok(ws::Message::Binary(bin)) => println!("Received binary: {:?}", bin),
             _ => (),
         }
     }
@@ -108,7 +101,6 @@ impl Handler<TestMessage> for SessionConnection {
 impl Handler<SendToClient> for SessionConnection {
     type Result = ();
     fn handle(&mut self, msg: SendToClient, ctx: &mut Self::Context) -> Self::Result {
-        println!("sending {} to client", msg.0);
         ctx.text(msg.0);
     }
 }
@@ -152,14 +144,12 @@ impl Session {
 impl Handler<TestMessage> for Session {
     type Result = ();
     fn handle(&mut self, msg: TestMessage, ctx: &mut Self::Context) -> Self::Result {
-        println!("hander of session got: {:#?}", msg.0);
     }
 }
 
 impl Handler<VerifyExistance> for Session {
     type Result = bool;
     fn handle(&mut self, msg: VerifyExistance, ctx: &mut Self::Context) -> Self::Result {
-        log::info!("verify existence ran on: {}", &self.id);
         self.id == msg.0
     }
 }
@@ -174,15 +164,8 @@ impl Handler<GetHostId> for Session {
 impl Handler<AddPlayer> for Session {
     type Result = Result<SessionConnection, SessionError>;
     fn handle(&mut self, msg: AddPlayer, ctx: &mut Self::Context) -> Self::Result {
-        println!("added player for session: {:#?}", &self.id);
-        println!("memory pos: {:p}\nfor id: {:#?}", self, &self.id);
         self.players
             .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
-        log::info!(
-            "Added new player with id: {} to session: {}",
-            &msg.id,
-            self.id
-        );
         let conn = SessionConnection::new(msg.id, msg.session_addr);
         Ok(conn)
     }

@@ -22,7 +22,7 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     let api_state = Arc::new(Mutex::new(ApiState::new()));
 
-    env_logger::init_from_env(Env::default().default_filter_or("trace"));
+    env_logger::init_from_env(Env::default().default_filter_or("default"));
 
     let api_state_clone = api_state.clone();
     HttpServer::new(move || {
