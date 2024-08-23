@@ -1,5 +1,4 @@
-use std::sync::{Arc, Mutex};
-
+use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::{
     web::{scope, Data},
@@ -8,6 +7,7 @@ use actix_web::{
 use dotenv::dotenv;
 use env_logger::Env;
 use log::info;
+use std::sync::{Arc, Mutex};
 
 use api_structures::api_state::ApiState;
 use scopes::game_session::game::game_scope;
@@ -27,11 +27,12 @@ async fn main() -> std::io::Result<()> {
     let api_state_clone = api_state.clone();
     HttpServer::new(move || {
         App::new()
+            .wrap(Cors::permissive()) // CHANGE BEFORE LAUNCH !!!!!!!!!!!!!!!!!!!!!!!!!!!
             .wrap(Logger::default())
             .app_data(Data::new(api_state_clone.clone()))
             .service(game_scope())
     })
-        .bind(("127.0.0.1", 8080))?
-        .run()
-        .await
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await
 }
