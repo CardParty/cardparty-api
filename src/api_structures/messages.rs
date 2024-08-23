@@ -39,8 +39,16 @@ pub struct GetSessionId();
 #[rtype(result = "()")]
 pub struct BrodcastMessage(pub String);
 
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct AddConnection(pub Addr<SessionConnection>);
+
 // session connection fucking yk TRRRTETRTRTRTRTRTRTRTRTRTRTRRTRTRTRTTR ( im losing my mind :) )
 
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub struct SendToClient(pub String);
+
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct ConnectWithSession(pub Addr<SessionConnection>);

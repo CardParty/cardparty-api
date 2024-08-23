@@ -1,9 +1,9 @@
-use std::ops::Add;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
 use actix::fut::ok;
 use actix::{Actor, Addr};
 use serde::{Deserialize, Serialize};
+use std::ops::Add;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use crate::api_structures::id::*;
@@ -72,7 +72,6 @@ impl SessionManager {
                     .await
                     .unwrap()
                     .unwrap();
-
                 return Some(conn);
             }
         }

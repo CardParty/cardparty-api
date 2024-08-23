@@ -1,3 +1,4 @@
+use std::io::SeekFrom;
 use std::{clone, ops::Add, vec};
 
 use crate::api_structures::id::*;
@@ -9,7 +10,10 @@ use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::messages::{AddPlayer, GetHostId, GetSessionId, SendToClient, VerifyExistance};
+use super::messages::{
+    AddConnection, AddPlayer, ConnectWithSession, GetHostId, GetSessionId, SendToClient,
+    VerifyExistance,
+};
 #[derive(Debug)]
 pub enum SessionError {
     FailedToAddPlayer,
@@ -38,11 +42,16 @@ impl Player {
 pub struct SessionConnection {
     session: Addr<Session>,
     user_id: UserId,
+    id: Uuid,
 }
 
 impl SessionConnection {
     pub fn new(user_id: UserId, session: Addr<Session>) -> Self {
-        Self { user_id, session }
+        Self {
+            user_id: user_id,
+            session: session,
+            id: Uuid::new_v4(),
+        }
     }
 }
 
@@ -77,7 +86,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                             .do_send(TestMessage(text.parse::<String>().unwrap()));
                     }
                 } else {
-                    println!("error with spliting the websocket string");
+                    println!("error with getting first object the websocket string");
                     self.session
                         .do_send(TestMessage(text.parse::<String>().unwrap()));
                 }
@@ -99,7 +108,16 @@ impl Handler<TestMessage> for SessionConnection {
 impl Handler<SendToClient> for SessionConnection {
     type Result = ();
     fn handle(&mut self, msg: SendToClient, ctx: &mut Self::Context) -> Self::Result {
-        ctx.text(msg.0)
+        println!("sending {} to client", msg.0);
+        ctx.text(msg.0);
+    }
+}
+
+impl Handler<ConnectWithSession> for SessionConnection {
+    type Result = ();
+
+    fn handle(&mut self, msg: ConnectWithSession, ctx: &mut Self::Context) -> Self::Result {
+        self.session.do_send(AddConnection(msg.0))
     }
 }
 #[derive(Clone)]
@@ -156,6 +174,8 @@ impl Handler<GetHostId> for Session {
 impl Handler<AddPlayer> for Session {
     type Result = Result<SessionConnection, SessionError>;
     fn handle(&mut self, msg: AddPlayer, ctx: &mut Self::Context) -> Self::Result {
+        println!("added player for session: {:#?}", &self.id);
+        println!("memory pos: {:p}\nfor id: {:#?}", self, &self.id);
         self.players
             .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
         log::info!(
@@ -163,7 +183,8 @@ impl Handler<AddPlayer> for Session {
             &msg.id,
             self.id
         );
-        Ok(SessionConnection::new(msg.id, msg.session_addr))
+        let conn = SessionConnection::new(msg.id, msg.session_addr);
+        Ok(conn)
     }
 }
 
@@ -180,5 +201,13 @@ impl Handler<BrodcastMessage> for Session {
         for conn in &self.connections {
             conn.do_send(SendToClient(msg.0.clone()))
         }
+    }
+}
+
+impl Handler<AddConnection> for Session {
+    type Result = ();
+
+    fn handle(&mut self, msg: AddConnection, ctx: &mut Self::Context) -> Self::Result {
+        self.connections.push(msg.0);
     }
 }

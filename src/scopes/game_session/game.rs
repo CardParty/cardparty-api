@@ -2,6 +2,7 @@ use crate::api_structures::{
     api_state::ApiState,
     id::*,
     managers::session_manager,
+    messages::ConnectWithSession,
     session::{Player, Session, SessionConnection},
 };
 use actix::fut::stream;
@@ -46,7 +47,10 @@ async fn create_game(
     if let Ok(host_id) = Uuid::parse_str(&context.host_id) {
         let username = context.username.clone();
         let state = data.lock().expect("failed to lock state");
-        let mut session_manager = state.session_manager.lock().expect("failed to lock session manager");
+        let mut session_manager = state
+            .session_manager
+            .lock()
+            .expect("failed to lock session manager");
         match session_manager.init_session(host_id, username).await {
             Ok(id) => HttpResponse::Ok().json(id),
             Err(_) => HttpResponse::InternalServerError().finish(),
@@ -62,7 +66,10 @@ async fn join_game(
     req: HttpRequest,
 ) -> Result<HttpResponse, actix_web::Error> {
     let state = data.lock().expect("failed to lock state");
-    let mut session_manager = state.session_manager.lock().expect("failed to lock session manager");
+    let mut session_manager = state
+        .session_manager
+        .lock()
+        .expect("failed to lock session manager");
     let query = web::Query::<JoinSession>::from_query(req.query_string()).unwrap();
     let session_id: SessionId = query.session_id;
     let user_id: UserId = query.user_id;
@@ -74,21 +81,21 @@ async fn join_game(
         user_id
     );
 
-    match session_manager.join_session(session_id, user_id, username).await {
-        Some(session_connection) => {
-            log::info!("Successfully joined session {}", session_id);
-            let resp = ws::start(session_connection, &req, stream);
-            match resp {
-                Ok(response) => Ok(response),
-                Err(e) => {
-                    log::error!("Failed to start WebSocket: {:?}", e);
-                    Ok(HttpResponse::InternalServerError().finish())
-                }
-            }
+    match session_manager
+        .join_session(session_id, user_id, username)
+        .await
+    {
+        Some(conn) => {
+            let (addr, resp) = ws::WsResponseBuilder::new(conn, &req, stream)
+                .start_with_addr()
+                .expect("pussi bomboclatt");
+            addr.do_send(ConnectWithSession(addr.clone()));
+            return Ok(resp);
         }
+
         None => {
-            log::warn!("Failed to join session {} for user {}", session_id, user_id);
-            Ok(HttpResponse::BadRequest().body("Failed to join session"))
+            println!("nigga boom");
+            return Ok(HttpResponse::BadRequest().finish());
         }
     }
 }
