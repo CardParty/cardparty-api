@@ -5,3 +5,4 @@ pub mod id;
 pub mod managers;
 pub mod messages;
 pub mod session;
+pub mod websocket_communicator;

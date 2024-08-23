@@ -5,7 +5,7 @@ use super::{
     session::Session,
 };
 use crate::api_structures::session::{SessionConnection, SessionError}; // Import the missing type SessionConnection
-// TEMPLATE
+                                                                       // TEMPLATE
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub struct TEMPLATE_DONT_USE();
@@ -34,3 +34,13 @@ pub struct AddPlayer {
 #[derive(Message, Debug)]
 #[rtype(result = "String")]
 pub struct GetSessionId();
+
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct BrodcastMessage(pub String);
+
+// session connection fucking yk TRRRTETRTRTRTRTRTRTRTRTRTRTRRTRTRTRTTR ( im losing my mind :) )
+
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct SendToClient(pub String);

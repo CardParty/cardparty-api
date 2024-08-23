@@ -1,20 +1,21 @@
 use std::{clone, ops::Add, vec};
 
-use crate::api_structures::card_game::deck::Deck;
 use crate::api_structures::id::*;
 use crate::api_structures::messages::TestMessage;
+use crate::api_structures::{card_game::deck::Deck, messages::BrodcastMessage};
 use actix::{Actor, Addr, Context, Handler, Message, StreamHandler};
 use actix_web::web::{self, Data};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::messages::{AddPlayer, GetHostId, GetSessionId, VerifyExistance};
+use super::messages::{AddPlayer, GetHostId, GetSessionId, SendToClient, VerifyExistance};
 #[derive(Debug)]
 pub enum SessionError {
     FailedToAddPlayer,
     PlayerAlreadyInSession,
     FailedToAddHostToSession,
+    BrodcastMessageFailure,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -55,8 +56,31 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Text(text)) => {
                 println!("Received: {}", text);
-                self.session
-                    .do_send(TestMessage(text.parse::<String>().unwrap()));
+
+                let split: Vec<String> = text
+                    .parse::<String>()
+                    .expect("failed to parse websocket string")
+                    .split(" ")
+                    .map(|str| String::from(str))
+                    .collect();
+
+                println!("Split: {:#?}", split);
+
+                if let Some(str) = split.first() {
+                    println!("got first");
+                    if str.starts_with("send_all") {
+                        println!("send_all detected");
+                        self.session.do_send(BrodcastMessage(split[1..].join(" ")));
+                    } else {
+                        println!("send_all not detected");
+                        self.session
+                            .do_send(TestMessage(text.parse::<String>().unwrap()));
+                    }
+                } else {
+                    println!("error with spliting the websocket string");
+                    self.session
+                        .do_send(TestMessage(text.parse::<String>().unwrap()));
+                }
             }
             Ok(ws::Message::Binary(bin)) => println!("Received binary: {:?}", bin),
             _ => (),
@@ -69,6 +93,13 @@ impl Handler<TestMessage> for SessionConnection {
 
     fn handle(&mut self, msg: TestMessage, ctx: &mut Self::Context) {
         ctx.text(msg.0);
+    }
+}
+
+impl Handler<SendToClient> for SessionConnection {
+    type Result = ();
+    fn handle(&mut self, msg: SendToClient, ctx: &mut Self::Context) -> Self::Result {
+        ctx.text(msg.0)
     }
 }
 #[derive(Clone)]
@@ -94,7 +125,7 @@ impl Session {
             players: Vec::new(),
             admin_token: Uuid::new_v4(),
         }
-            .start();
+        .start();
 
         return (addr, id);
     }
@@ -103,7 +134,7 @@ impl Session {
 impl Handler<TestMessage> for Session {
     type Result = ();
     fn handle(&mut self, msg: TestMessage, ctx: &mut Self::Context) -> Self::Result {
-        println!("hander of session got: {:#?}", msg);
+        println!("hander of session got: {:#?}", msg.0);
     }
 }
 
@@ -140,5 +171,14 @@ impl Handler<GetSessionId> for Session {
     type Result = String;
     fn handle(&mut self, msg: GetSessionId, ctx: &mut Self::Context) -> Self::Result {
         return self.id.to_string();
+    }
+}
+impl Handler<BrodcastMessage> for Session {
+    type Result = ();
+
+    fn handle(&mut self, msg: BrodcastMessage, ctx: &mut Self::Context) -> Self::Result {
+        for conn in &self.connections {
+            conn.do_send(SendToClient(msg.0.clone()))
+        }
     }
 }
