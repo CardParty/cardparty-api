@@ -10,7 +10,6 @@ use std::sync::{Arc, Mutex};
 
 use api_structures::api_state::ApiState;
 use scopes::game_session::game::game_scope;
-
 mod api_structures;
 mod auth;
 mod database;
@@ -23,12 +22,11 @@ async fn main() -> std::io::Result<()> {
 
     env_logger::init_from_env(Env::default().default_filter_or("default"));
 
-    let api_state_clone = api_state.clone();
     HttpServer::new(move || {
         App::new()
             .wrap(Cors::permissive()) // CHANGE BEFORE LAUNCH !!!!!!!!!!!!!!!!!!!!!!!!!!!
             .wrap(Logger::default())
-            .app_data(Data::new(api_state_clone.clone()))
+            .app_data(Data::new(api_state.clone()))
             .service(game_scope())
     })
     .bind(("127.0.0.1", 8080))?
