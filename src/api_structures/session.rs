@@ -58,8 +58,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                 let split: Vec<String> = text
                     .parse::<String>()
                     .expect("failed to parse websocket string")
-                    .split(" ")
-                    .map(|str| String::from(str))
+                    .split(' ')
+                    .map(String::from)
                     .collect();
 
                 if let Some(str) = split.first() {
