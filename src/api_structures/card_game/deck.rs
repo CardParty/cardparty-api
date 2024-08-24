@@ -33,7 +33,8 @@ pub struct MetaData {
     pub event_type: EventType,
     pub timestamp: String,
     pub event_id: Uuid,
-    pub adressor: Addr<SessionConnection>,
+    #[serde(skip)]
+    pub adressor: Option<Addr<SessionConnection>>,
 }
 
 #[derive(Serialize, Deserialize)]
