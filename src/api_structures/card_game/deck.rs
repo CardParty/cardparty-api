@@ -7,11 +7,13 @@ use crate::api_structures::session::{Player, SessionConnection};
 #[derive(Serialize, Deserialize)]
 pub struct Deck {}
 
+#[derive(Serialize, Deserialize)]
 pub struct WebsocketEvent {
     pub meta_data: MetaData,
     pub data: Data,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct WebsocketEventBuilder {
     pub meta_data: Option<MetaData>,
     pub data: Option<Data>,
@@ -26,6 +28,7 @@ impl WebsocketEvent {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct MetaData {
     pub event_type: EventType,
     pub timestamp: String,
@@ -33,11 +36,13 @@ pub struct MetaData {
     pub adressor: Addr<SessionConnection>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum Data {
     Deck(Deck),
     Players(Vec<Player>),
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum EventType {
     Responding,
     UpdateState,
