@@ -1,0 +1,17 @@
+warning: single-character string constant used as pattern
+  --> src\api_structures\session.rs:67:28
+   |
+67 |                     .split(" ")
+   |                            ^^^ help: consider using a `char`: `' '`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#single_char_pattern
+   = note: `#[warn(clippy::single_char_pattern)]` on by default
+
+   warning: redundant closure
+  --> src\api_structures\session.rs:68:26
+   |
+68 |                     .map(|str| String::from(str))
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^ help: replace the closure with the function itself: `String::from`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_closure
+   = note: `#[warn(clippy::redundant_closure)]` on by default

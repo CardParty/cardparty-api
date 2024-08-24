@@ -1,6 +1,6 @@
 use crate::api_structures::id::*;
+use crate::api_structures::messages::BroadcastMessage;
 use crate::api_structures::messages::TestMessage;
-use crate::api_structures::{messages::BroadcastMessage};
 use actix::{Actor, Addr, Context, Handler, StreamHandler};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
@@ -11,12 +11,7 @@ use super::messages::{
     VerifyExistence,
 };
 #[derive(Debug)]
-pub enum SessionError {
-    FailedToAddPlayer,
-    PlayerAlreadyInSession,
-    FailedToAddHostToSession,
-    BroadcastMessageFailure,
-}
+pub enum SessionError {}
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Player {
@@ -60,14 +55,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
         match msg {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Text(text)) => {
-
                 let split: Vec<String> = text
                     .parse::<String>()
                     .expect("failed to parse websocket string")
                     .split(" ")
                     .map(|str| String::from(str))
                     .collect();
-
 
                 if let Some(str) = split.first() {
                     if str.starts_with("send_all") {
@@ -133,14 +126,13 @@ impl Session {
         }
         .start();
 
-        return (addr, id);
+        (addr, id)
     }
 }
 
 impl Handler<TestMessage> for Session {
     type Result = ();
-    fn handle(&mut self, _msg: TestMessage, _ctx: &mut Self::Context) -> Self::Result {
-    }
+    fn handle(&mut self, _msg: TestMessage, _ctx: &mut Self::Context) -> Self::Result {}
 }
 
 impl Handler<VerifyExistence> for Session {
@@ -170,7 +162,7 @@ impl Handler<AddPlayer> for Session {
 impl Handler<GetSessionId> for Session {
     type Result = String;
     fn handle(&mut self, _msg: GetSessionId, _ctx: &mut Self::Context) -> Self::Result {
-        return self.id.to_string();
+        self.id.to_string()
     }
 }
 impl Handler<BroadcastMessage> for Session {
