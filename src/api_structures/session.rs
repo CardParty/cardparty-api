@@ -64,8 +64,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                 let split: Vec<String> = text
                     .parse::<String>()
                     .expect("failed to parse websocket string")
-                    .split(" ")
-                    .map(|str| String::from(str))
+                    .split(' ')
+                    .map(String::from)
                     .collect();
 
 
@@ -133,7 +133,7 @@ impl Session {
         }
         .start();
 
-        return (addr, id);
+        (addr, id)
     }
 }
 
@@ -170,7 +170,7 @@ impl Handler<AddPlayer> for Session {
 impl Handler<GetSessionId> for Session {
     type Result = String;
     fn handle(&mut self, _msg: GetSessionId, _ctx: &mut Self::Context) -> Self::Result {
-        return self.id.to_string();
+        self.id.to_string()
     }
 }
 impl Handler<BroadcastMessage> for Session {
