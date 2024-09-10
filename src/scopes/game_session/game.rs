@@ -1,8 +1,4 @@
-use crate::api_structures::{
-    api_state::ApiState,
-    id::*,
-    messages::ConnectWithSession,
-};
+use crate::api_structures::{api_state::ApiState, id::*, messages::ConnectWithSession};
 use actix_web::{
     post,
     web::{self},
@@ -10,9 +6,7 @@ use actix_web::{
 };
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
-use std::{
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
@@ -71,7 +65,6 @@ async fn join_game(
     let user_id: UserId = query.user_id;
     let username: String = query.username.clone();
 
-
     return match session_manager
         .join_session(session_id, user_id, username)
         .await
@@ -79,15 +72,13 @@ async fn join_game(
         Some(conn) => {
             let (addr, resp) = ws::WsResponseBuilder::new(conn, &req, stream)
                 .start_with_addr()
-                .expect("pussi bomboclatt");
+                .expect("cannot create with addr");
             addr.do_send(ConnectWithSession(addr.clone()));
             Ok(resp)
         }
 
-        None => {
-            Ok(HttpResponse::BadRequest().finish())
-        }
-    }
+        None => Ok(HttpResponse::BadRequest().finish()),
+    };
 }
 
 pub fn game_scope() -> Scope {

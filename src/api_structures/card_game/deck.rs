@@ -4,16 +4,16 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api_structures::session::{Player, SessionConnection};
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Deck {}
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WebsocketEvent {
     pub meta_data: MetaData,
     pub data: Data,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WebsocketEventBuilder {
     pub meta_data: Option<MetaData>,
     pub data: Option<Data>,
@@ -26,9 +26,10 @@ impl WebsocketEvent {
             data: None,
         }
     }
+
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MetaData {
     pub event_type: EventType,
     pub timestamp: String,
@@ -37,13 +38,13 @@ pub struct MetaData {
     pub adressor: Option<Addr<SessionConnection>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Data {
     Deck(Deck),
     Players(Vec<Player>),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum EventType {
     Responding,
     UpdateState,

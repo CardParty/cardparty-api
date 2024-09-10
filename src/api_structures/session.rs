@@ -4,6 +4,7 @@ use crate::api_structures::messages::TestMessage;
 use actix::{Actor, Addr, Context, Handler, StreamHandler};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
+use serde_json::{from_value, Value};
 use uuid::Uuid;
 
 use super::messages::{
@@ -13,13 +14,18 @@ use super::messages::{
 #[derive(Debug)]
 pub enum SessionError {}
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Player {
     username: String,
     id: UserId,
     is_host: bool,
 }
-
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub enum SessionFlag {
+    AwatingHost,
+    Lobby,
+    Game,
+}
 impl Player {
     pub fn new(id: UserId, username: String, is_host: bool) -> Self {
         Self {
@@ -34,14 +40,16 @@ pub struct SessionConnection {
     session: Addr<Session>,
     user_id: UserId,
     id: Uuid,
+    is_admin: bool,
 }
 
 impl SessionConnection {
-    pub fn new(user_id: UserId, session: Addr<Session>) -> Self {
+    pub fn new(user_id: UserId, session: Addr<Session>, is_admin: bool) -> Self {
         Self {
             user_id,
             session,
             id: Uuid::new_v4(),
+            is_admin,
         }
     }
 }
@@ -49,7 +57,44 @@ impl SessionConnection {
 impl Actor for SessionConnection {
     type Context = ws::WebsocketContext<Self>;
 }
+#[derive(Deserialize, Debug)]
+struct Meta {
+    packet_type: String,
+}
 
+#[derive(Deserialize, Debug)]
+struct Packet {
+    meta: Meta,
+    data: Value, // `data` is deserialized as `serde_json::Value`
+}
+#[derive(Deserialize, Debug)]
+struct UpdateData {
+    id: u32,
+    status: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct CreateData {
+    name: String,
+    value: u64,
+}
+pub fn deserialize_json(json: &str) {
+    let packet: Packet = serde_json::from_str(json).unwrap();
+    print!("Deserialized packet: {:?}", packet);
+    match packet.meta.packet_type.as_str() {
+        "update" => {
+            let update_data: UpdateData = from_value(packet.data).unwrap();
+            println!("Deserialized as UpdateData: {:?}", update_data);
+        }
+        "create" => {
+            let create_data: CreateData = from_value(packet.data).unwrap();
+            println!("Deserialized as CreateData: {:?}", create_data);
+        }
+        _ => {
+            println!("Unknown packet type");
+        }
+    }
+}
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match msg {
@@ -65,6 +110,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                 if let Some(str) = split.first() {
                     if str.starts_with("send_all") {
                         self.session.do_send(BroadcastMessage(split[1..].join(" ")));
+                        print!(
+                            "Deserialized packet: {:?}",
+                            deserialize_json(split[1..].join(" ").as_str())
+                        );
                     } else {
                         self.session
                             .do_send(TestMessage(text.parse::<String>().unwrap()));
@@ -108,6 +157,7 @@ pub struct Session {
     pub host_id: Uuid,
     pub players: Vec<Player>,
     pub admin_token: Uuid,
+    pub session_flag: SessionFlag,
 }
 
 impl Actor for Session {
@@ -123,6 +173,7 @@ impl Session {
             connections: Vec::new(),
             players: Vec::new(),
             admin_token: Uuid::new_v4(),
+            session_flag: SessionFlag::AwatingHost,
         }
         .start();
 
@@ -154,7 +205,13 @@ impl Handler<AddPlayer> for Session {
     fn handle(&mut self, msg: AddPlayer, _ctx: &mut Self::Context) -> Self::Result {
         self.players
             .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
-        let conn = SessionConnection::new(msg.id, msg.session_addr);
+        if self.players.len() == 1 {
+            let conn = SessionConnection::new(msg.id, msg.session_addr, true);
+            self.session_flag = SessionFlag::Lobby;
+        } else {
+            let conn = SessionConnection::new(msg.id, msg.session_addr, false);
+            self.session_flag = SessionFlag::Lobby;
+        }
         Ok(conn)
     }
 }
