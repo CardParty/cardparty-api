@@ -4,7 +4,7 @@ use serde::de::value;
 use std::{collections::HashMap, hash::Hash};
 use uuid::Uuid;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Selector {
     Current,
     Previous,
@@ -12,7 +12,7 @@ pub enum Selector {
     Random,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MathOperation {
     Add,
     Sub,
@@ -20,7 +20,7 @@ pub enum MathOperation {
     Mul,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operation {
     GetFromTable {
         table: String,
@@ -35,16 +35,19 @@ pub enum Operation {
         state: String,
     },
     UpdateState {
+        id: Uuid,
         state: String,
         math_operation: MathOperation,
         value: i32,
     },
     Error(String),
+    RawText(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Card {
-    operations: Vec<Operation>,
+    pub operations: Vec<Operation>,
+    pub id: Uuid,
 }
 
 pub fn into_operation(raw: String) -> Operation {
@@ -147,9 +150,10 @@ pub fn into_operation(raw: String) -> Operation {
             .unwrap_or(0);
 
         Operation::UpdateState {
-            state,
-            math_operation,
-            value,
+            id: Uuid::new_v4(),
+            state: state,
+            math_operation: math_operation,
+            value: value,
         }
     } else {
         Operation::Error("Unknown operation type".to_string())
@@ -157,9 +161,9 @@ pub fn into_operation(raw: String) -> Operation {
 }
 
 pub struct DeckBundle {
-    tables: HashMap<String, Vec<Value>>,
-    states: HashMap<String, StateModule>,
-    cards: Vec<ParserSegment>,
+    pub tables: HashMap<String, Vec<Value>>,
+    pub states: HashMap<String, StateModule>,
+    pub cards: Vec<Vec<ParserSegment>>,
 }
 
 pub enum StateModule {
@@ -175,14 +179,14 @@ pub enum StateModule {
 }
 
 pub struct Value {
-    value: String,
+    pub value: String,
     tags: Vec<String>,
 }
 
 impl Value {
     pub fn new(value: String, tags: Vec<String>) {}
-    pub fn has_tag(&self, tag: String) -> bool {
-        self.tags.contains(&tag)
+    pub fn has_tag(&self, tag: &String) -> bool {
+        self.tags.contains(tag)
     }
 }
 

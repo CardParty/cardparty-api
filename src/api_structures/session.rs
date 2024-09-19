@@ -16,7 +16,7 @@ pub enum SessionError {}
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Player {
-    username: String,
+    pub username: String,
     pub id: UserId,
     is_host: bool,
 }
