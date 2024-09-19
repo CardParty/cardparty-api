@@ -13,8 +13,6 @@ use std::hash::Hash;
 use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub enum GameState {
-    AwaitHost,
-    AwaitDeck,
     Lobby,
     PreGame,
     Game,
@@ -75,7 +73,7 @@ impl GameManager {
             card_count: 0,
             current: 0,
             rng: thread_rng(),
-            game_state: GameState::AwaitHost,
+            game_state: GameState::Lobby,
             awaited_states: HashMap::new(),
         }
     }
@@ -164,8 +162,6 @@ impl GameManager {
 
     pub fn advance_state(&mut self) {
         match self.game_state {
-            GameState::AwaitHost => self.game_state = GameState::AwaitDeck,
-            GameState::AwaitDeck => self.game_state = GameState::Lobby,
             GameState::Lobby => self.game_state = GameState::PreGame,
             GameState::PreGame => self.game_state = GameState::Game,
             GameState::Game => self.game_state = GameState::PostGame,
