@@ -77,7 +77,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                 if let Some(str) = split.first() {
                     if str.starts_with("send_all") {
                         self.session.do_send(BroadcastMessage(split[1..].join(" ")));
-                        print!(
+                        println!(
                             "Deserialized packet: {:?}",
                             deserialize_json(split[1..].join(" ").as_str())
                         );
@@ -148,7 +148,7 @@ impl Session {
         (addr, id)
     }
     pub fn add_game_manager(&mut self, deck_bundle: DeckBundle) {
-        self.game_manager = Some(GameManager::new(deck_bundle));
+        self.game_manager = Some(GameManager::init(deck_bundle));
     }
     pub fn get_game_manager(self) -> GameManager {
         self.game_manager.unwrap()
