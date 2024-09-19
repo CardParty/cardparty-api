@@ -1,0 +1,14 @@
+// Main rule: Entire input
+result = { (outside_braces | braced_content)+ }
+
+// Rule for content outside braces
+outside_braces = @{ ((!"{" ~ ANY) | ("}" ~ " "))+ }
+
+// Rule for content inside braces, excluding the braces
+braced_content = ${ "{" ~ inner_content ~ "}" }
+
+// Rule for the actual content inside braces
+inner_content = @{ (!"{" ~ !"}" ~ ANY)* }
+
+// Whitespace handling (excluding single space)
+WHITESPACE = _{ (" "{2,}) | "\t" | "\r" | "\n" }
