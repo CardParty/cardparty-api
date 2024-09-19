@@ -163,8 +163,15 @@ pub struct DeckBundle {
 }
 
 pub enum StateModule {
-    LocalState { value: i64, min: i64, max: i64 },
-    GlobalState { map: HashMap<Uuid, (i64, i64, i64)> },
+    LocalState {
+        value: i64,
+        min: i64,
+        max: i64,
+    },
+    GlobalState {
+        template: (i64, i64, i64),
+        map: HashMap<Uuid, (i64, i64, i64)>,
+    },
 }
 
 pub struct Value {
