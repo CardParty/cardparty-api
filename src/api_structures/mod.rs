@@ -6,3 +6,4 @@ pub mod managers;
 pub mod messages;
 pub mod session;
 pub mod websocket_communicator;
+mod packet_parser;

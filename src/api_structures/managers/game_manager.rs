@@ -11,7 +11,7 @@ use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::hash::Hash;
 use uuid::Uuid;
-
+#[derive(Debug, Clone)]
 pub enum GameState {
     AwaitHost,
     AwaitDeck,
@@ -20,7 +20,7 @@ pub enum GameState {
     Game,
     PostGame,
 }
-
+#[derive(Debug, Clone)]
 pub struct StateOption {
     pub id: Uuid,
     pub state: String,
@@ -33,6 +33,7 @@ pub struct CardResult {
     pub text: String,
 }
 
+#[derive(Clone)]
 pub struct GameManager {
     players: Vec<Player>,
     tables: HashMap<String, Vec<Value>>,
