@@ -208,11 +208,13 @@ impl Handler<AddPlayer> for Session {
         if self.players.len() == 1 {
             let conn = SessionConnection::new(msg.id, msg.session_addr, true);
             self.session_flag = SessionFlag::Lobby;
+            Ok(conn)
         } else {
             let conn = SessionConnection::new(msg.id, msg.session_addr, false);
             self.session_flag = SessionFlag::Lobby;
+            Ok(conn)
         }
-        Ok(conn)
+
     }
 }
 
