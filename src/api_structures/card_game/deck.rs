@@ -165,7 +165,7 @@ pub struct DeckBundle {
     pub states: HashMap<String, StateModule>,
     pub cards: Vec<Vec<ParserSegment>>,
 }
-
+#[derive(Debug, Clone)]
 pub enum StateModule {
     LocalState {
         value: i64,
@@ -177,7 +177,7 @@ pub enum StateModule {
         map: HashMap<Uuid, (i64, i64, i64)>,
     },
 }
-
+#[derive(Debug, Clone)]
 pub struct Value {
     pub value: String,
     tags: Vec<String>,

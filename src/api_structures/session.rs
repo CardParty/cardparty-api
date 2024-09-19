@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::api_structures::id::*;
 use crate::api_structures::messages::BroadcastMessage;
 use crate::api_structures::messages::TestMessage;
@@ -6,7 +7,9 @@ use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
 use uuid::Uuid;
-
+use crate::api_structures::card_game::deck::DeckBundle;
+use crate::api_structures::managers::game_manager::{GameManager, GameState};
+use super::packet_parser::*;
 use super::messages::{
     AddConnection, AddPlayer, ConnectWithSession, GetHostId, GetSessionId, SendToClient,
     VerifyExistence,
@@ -57,44 +60,8 @@ impl SessionConnection {
 impl Actor for SessionConnection {
     type Context = ws::WebsocketContext<Self>;
 }
-#[derive(Deserialize, Debug)]
-struct Meta {
-    packet_type: String,
-}
 
-#[derive(Deserialize, Debug)]
-struct Packet {
-    meta: Meta,
-    data: Value, // `data` is deserialized as `serde_json::Value`
-}
-#[derive(Deserialize, Debug)]
-struct UpdateData {
-    id: u32,
-    status: String,
-}
 
-#[derive(Deserialize, Debug)]
-struct CreateData {
-    name: String,
-    value: u64,
-}
-pub fn deserialize_json(json: &str) {
-    let packet: Packet = serde_json::from_str(json).unwrap();
-    print!("Deserialized packet: {:?}", packet);
-    match packet.meta.packet_type.as_str() {
-        "update" => {
-            let update_data: UpdateData = from_value(packet.data).unwrap();
-            println!("Deserialized as UpdateData: {:?}", update_data);
-        }
-        "create" => {
-            let create_data: CreateData = from_value(packet.data).unwrap();
-            println!("Deserialized as CreateData: {:?}", create_data);
-        }
-        _ => {
-            println!("Unknown packet type");
-        }
-    }
-}
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match msg {
@@ -115,6 +82,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                             deserialize_json(split[1..].join(" ").as_str())
                         );
                     } else {
+                        println!("Deserialized packet: {:?}", deserialize_json(split.join(" ").as_str()));
                         self.session
                             .do_send(TestMessage(text.parse::<String>().unwrap()));
                     }
@@ -157,7 +125,7 @@ pub struct Session {
     pub host_id: Uuid,
     pub players: Vec<Player>,
     pub admin_token: Uuid,
-    pub session_flag: SessionFlag,
+    pub game_manager:Option<GameManager>
 }
 
 impl Actor for Session {
@@ -173,11 +141,17 @@ impl Session {
             connections: Vec::new(),
             players: Vec::new(),
             admin_token: Uuid::new_v4(),
-            session_flag: SessionFlag::AwatingHost,
+            game_manager:None,
         }
         .start();
 
         (addr, id)
+    }
+    pub fn add_game_manager(&mut self, deck_bundle: DeckBundle) {
+        self.game_manager = Some(GameManager::new(deck_bundle));
+    }
+    pub fn get_game_manager(self) -> GameManager {
+        self.game_manager.unwrap()
     }
 }
 
@@ -207,11 +181,10 @@ impl Handler<AddPlayer> for Session {
             .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
         if self.players.len() == 1 {
             let conn = SessionConnection::new(msg.id, msg.session_addr, true);
-            self.session_flag = SessionFlag::Lobby;
+
             Ok(conn)
         } else {
             let conn = SessionConnection::new(msg.id, msg.session_addr, false);
-            self.session_flag = SessionFlag::Lobby;
             Ok(conn)
         }
     }
