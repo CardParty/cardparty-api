@@ -17,7 +17,7 @@ pub enum SessionError {}
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Player {
     username: String,
-    id: UserId,
+    pub id: UserId,
     is_host: bool,
 }
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -214,7 +214,6 @@ impl Handler<AddPlayer> for Session {
             self.session_flag = SessionFlag::Lobby;
             Ok(conn)
         }
-
     }
 }
 
