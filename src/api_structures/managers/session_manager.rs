@@ -34,7 +34,7 @@ impl SessionManager {
         host_id: UserId,
         username: String,
     ) -> Result<SessionId, SessionManagerError> {
-        let sessions = self.sessions.lock().unwrap();
+        let sessions = self.sessions.lock().expect("aaa");
         for session in sessions.iter() {
             let session_host_id = session
                 .send(GetHostId())
@@ -50,7 +50,7 @@ impl SessionManager {
         let (addr, id) = Session::init(host_id, username, man_addr).await;
         drop(sessions);
 
-        self.sessions.lock().unwrap().push(addr.clone());
+        self.sessions.lock().expect("sigma").push(addr.clone());
         Ok(id)
     }
 
@@ -60,7 +60,7 @@ impl SessionManager {
         user_id: UserId,
         username: String,
     ) -> Option<SessionConnection> {
-        let sessions = self.sessions.lock().unwrap();
+        let sessions = self.sessions.lock().expect("Failed to lock sessions");
         for session in sessions.iter() {
             let session_id_res = session
                 .send(GetSessionId())
@@ -75,8 +75,9 @@ impl SessionManager {
                         session_addr: session.clone(),
                     })
                     .await
-                    .unwrap()
-                    .unwrap();
+                    .expect("Failed to add player")
+                    .expect("Failed to add player");
+
                 return Some(conn);
             }
         }
@@ -88,16 +89,23 @@ impl Handler<CloseSession> for SessionManager {
     type Result = ();
 
     fn handle(&mut self, msg: CloseSession, _ctx: &mut Self::Context) -> Self::Result {
-        let mut sessions = self.sessions.lock().unwrap();
+        println!("Closing session: {:?}", msg.0);
+        let sessions = Arc::clone(&self.sessions);
+        actix::spawn(async move {
+            let mut sessions = sessions.lock().expect("Failed to lock sessions");
             sessions.retain(|session| {
-            let id = block_on(async {
-                let s = session
-                    .send(GetSessionId())
-                    .await
-                    .expect("Failed to get session id");
-                Uuid::parse_str(&s).expect("Failed to parse UUID")
+                let session_id = block_on(async {
+                    session
+                        .send(GetSessionId())
+                        .await
+                        .expect("Failed to get session ID")
+                });
+
+                let parsed_id = Uuid::parse_str(&session_id).expect("Failed to parse UUID");
+                parsed_id != msg.0
             });
-            msg.0 != id
         });
+        println!("Session closed: {:?}", msg.0);
     }
+
 }
