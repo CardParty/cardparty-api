@@ -1,10 +1,10 @@
 use pest::Parser;
 use pest_derive::Parser;
-use serde::de::value;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, hash::Hash};
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Selector {
     Current,
     Previous,
@@ -12,7 +12,7 @@ pub enum Selector {
     Random,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MathOperation {
     Add,
     Sub,
@@ -20,7 +20,7 @@ pub enum MathOperation {
     Mul,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Operation {
     GetFromTable {
         table: String,
@@ -44,7 +44,7 @@ pub enum Operation {
     RawText(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Card {
     pub operations: Vec<Operation>,
     pub id: Uuid,
@@ -151,21 +151,24 @@ pub fn into_operation(raw: String) -> Operation {
 
         Operation::UpdateState {
             id: Uuid::new_v4(),
-            state: state,
-            math_operation: math_operation,
-            value: value,
+            state,
+            math_operation,
+            value,
         }
     } else {
         Operation::Error("Unknown operation type".to_string())
     }
 }
 
+#[derive(Debug, Clone)]
+
 pub struct DeckBundle {
+    pub score_state: String,
     pub tables: HashMap<String, Vec<Value>>,
     pub states: HashMap<String, StateModule>,
     pub cards: Vec<Vec<ParserSegment>>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StateModule {
     LocalState {
         value: i64,
@@ -177,7 +180,7 @@ pub enum StateModule {
         map: HashMap<Uuid, (i64, i64, i64)>,
     },
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Value {
     pub value: String,
     tags: Vec<String>,
@@ -190,10 +193,67 @@ impl Value {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Deck {
+    deck_name: String,
+    id: Uuid,
+    score_state: String,
+    tables: Vec<Table>,
+    states: Vec<State>,
+    cards: Vec<String>,
+}
+
+impl Deck {
+    pub fn into_bundle(self) -> DeckBundle {
+        let mut table_hash = HashMap::new();
+        for table in self.tables {
+            table_hash.insert(table.name, table.values);
+        }
+        let mut state_hash = HashMap::new();
+        for state in self.states {
+            if state.is_local {
+                state_hash.insert(
+                    state.name,
+                    StateModule::LocalState {
+                        value: state.value as i64,
+                        min: 0,
+                        max: 0,
+                    },
+                );
+            }
+        }
+
+        let mut segmentized_cards = Vec::new();
+        for card in self.cards {
+            segmentized_cards.push(into_segments(card));
+        }
+
+        DeckBundle {
+            score_state: self.score_state,
+            tables: table_hash,
+            states: state_hash,
+            cards: segmentized_cards,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct State {
+    pub name: String,
+    pub value: i32,
+    pub is_local: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Table {
+    pub name: String,
+    pub values: Vec<Value>,
+}
+
 #[derive(Parser)]
 #[grammar = "grammar/segment.pest"]
 struct DyncodeParser;
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ParserSegment {
     RawText(String),
     DynCode(String),

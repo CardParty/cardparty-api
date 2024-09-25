@@ -1,3 +1,5 @@
+// nic zostawiamy
+
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::{get, HttpResponse, Responder};

@@ -1,11 +1,13 @@
-use actix::{Addr};
+use crate::api_structures::messages::{AddPlayer, CloseSession, GetHostId, GetSessionId};
+use crate::api_structures::session::Session;
+use crate::api_structures::session_connection::SessionConnection;
+use crate::api_structures::{id::*, session};
+use actix::{Actor, Addr, Context, Handler};
+use futures::executor::block_on;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-use crate::api_structures::id::*;
-use crate::api_structures::messages::{AddPlayer, GetHostId, GetSessionId};
-use crate::api_structures::session::{Session, SessionConnection};
-
+#[derive(Clone)]
 pub struct SessionManager {
     pub sessions: Vec<Addr<Session>>,
 }
@@ -13,6 +15,10 @@ pub struct SessionManager {
 pub enum SessionManagerError {
     UserSessionInstanceAlreadyExists,
     NoActiveSessions,
+}
+
+impl Actor for SessionManager {
+    type Context = Context<Self>;
 }
 
 impl SessionManager {
@@ -37,7 +43,9 @@ impl SessionManager {
             }
         }
 
-        let (addr, id) = Session::init(host_id, username).await;
+        let man_addr = self.clone().start();
+
+        let (addr, id) = Session::init(host_id, username, man_addr).await;
 
         self.sessions.push(addr.clone());
         Ok(id)
@@ -69,5 +77,22 @@ impl SessionManager {
             }
         }
         None
+    }
+}
+
+impl Handler<CloseSession> for SessionManager {
+    type Result = ();
+
+    fn handle(&mut self, msg: CloseSession, ctx: &mut Self::Context) -> Self::Result {
+        self.sessions.retain(|session| {
+            let id = block_on(async {
+                let s = session
+                    .send(GetSessionId())
+                    .await
+                    .expect("jaja mnie swędzą");
+                Uuid::parse_str(&s).expect("uuid wykurwiło sie XDDD")
+            });
+            msg.0 == id
+        });
     }
 }
