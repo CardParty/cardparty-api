@@ -1,9 +1,11 @@
+use crate::api_structures::id::*;
 use crate::api_structures::messages::{AddPlayer, CloseSession, GetHostId, GetSessionId};
-use crate::api_structures::session::Session;
+use crate::api_structures::session::{self, Session};
 use crate::api_structures::session_connection::SessionConnection;
-use crate::api_structures::{id::*};
-use actix::{Actor, Addr, Context, Handler};
+use actix::{fut, spawn, Actor, Addr, Context, Handler};
+use actix_web::guard::Get;
 use futures::executor::block_on;
+use futures::future::join_all;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -89,23 +91,31 @@ impl Handler<CloseSession> for SessionManager {
     type Result = ();
 
     fn handle(&mut self, msg: CloseSession, _ctx: &mut Self::Context) -> Self::Result {
-        println!("Closing session: {:?}", msg.0);
-        let sessions = Arc::clone(&self.sessions);
-        actix::spawn(async move {
-            let mut sessions = sessions.lock().expect("Failed to lock sessions");
-            sessions.retain(|session| {
-                let session_id = block_on(async {
-                    session
-                        .send(GetSessionId())
-                        .await
-                        .expect("Failed to get session ID")
-                });
+        let sessions = self.sessions.clone();
+        let msg_id = msg.0;
 
-                let parsed_id = Uuid::parse_str(&session_id).expect("Failed to parse UUID");
-                parsed_id != msg.0
+        spawn(async move {
+            let session_ids: Vec<Option<Uuid>> = {
+                let sessions = sessions.lock().unwrap();
+                let futures = sessions.iter().map(|session| {
+                    let session = session.clone();
+                    async move {
+                        let session_id_res = session.send(GetSessionId()).await.ok();
+
+                        session_id_res.and_then(|id| Uuid::parse_str(&id).ok())
+                    }
+                });
+                join_all(futures).await
+            };
+
+            let mut sessions = sessions.lock().unwrap();
+            sessions.retain(|session| {
+                if let Some(session_id) = session_ids.iter().find(|id| id.is_some()) {
+                    *session_id.as_ref().unwrap() != msg_id
+                } else {
+                    true
+                }
             });
         });
-        println!("Session closed: {:?}", msg.0);
     }
-
 }
