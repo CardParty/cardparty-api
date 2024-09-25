@@ -229,9 +229,11 @@ impl Handler<SendPacket> for Session {
                 // Close all websocket connections
                 // Use session manager to close this session.
                 for conn in self.connections.clone() {
+                    println!("closing conn");
                     conn.do_send(CloseSessionConnection);
                 }
                 self.manager_addr.do_send(CloseSession(self.id.clone()));
+                println!("To ja jestem sigmą");
                 return Ok(PacketResponse::CloseSessionOk);
             }
             _ => Err(PacketError::CipaChuj),
