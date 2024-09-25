@@ -236,6 +236,7 @@ impl Handler<SendPacket> for Session {
                 println!("To ja jestem sigmą");
                 return Ok(PacketResponse::CloseSessionOk);
             }
+            super::packet_parser::Packet::TestError {} => return Err(PacketError::CipaChuj),
             _ => Err(PacketError::CipaChuj),
         }
     }
