@@ -38,12 +38,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                 let response = block_on(async { self.session.send(SendPacket(packet)).await? });
 
                 match response {
-                    Ok(resp) => match resp {
-                        PacketResponse::TestPacketWithStringOk { string } => {
-                            ctx.text(string);
-                        }
-                        _ => {}
-                    },
+                    Ok(resp) => ctx.text(
+                        serde_json::to_string(&resp).expect("Failed to serialze Packet Response"),
+                    ),
                     Err(err) => {
                         ctx.text("ajaj cos sie wyjebało");
                     }

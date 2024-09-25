@@ -72,6 +72,8 @@ pub enum Packet {
     CloseSession {},
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "packet")]
 pub enum PacketResponse {
     // API -> CLIENT
     UpdateStateOk,
