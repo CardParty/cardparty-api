@@ -57,6 +57,8 @@ impl SessionManager {
         user_id: UserId,
         username: String,
     ) -> Option<SessionConnection> {
+        println!("Joining session: {:?}", session_id);
+        println!("Sessions: {:?}", self.sessions);
         for session in &self.sessions {
             let session_id_res = session
                 .send(GetSessionId())
@@ -84,6 +86,8 @@ impl Handler<CloseSession> for SessionManager {
     type Result = ();
 
     fn handle(&mut self, msg: CloseSession, ctx: &mut Self::Context) -> Self::Result {
+        println!("Closing session: {:?}", msg.0);
+        println!("Sessions pointer address {:p}", &self.sessions);
         self.sessions.retain(|session| {
             let id = block_on(async {
                 let s = session
@@ -92,7 +96,11 @@ impl Handler<CloseSession> for SessionManager {
                     .expect("jaja mnie swędzą");
                 Uuid::parse_str(&s).expect("uuid wykurwiło sie XDDD")
             });
+            println!("{}", msg.0 == id);
             msg.0 == id
         });
+        println!("{}", self.sessions.len());
+        println!("{:?}", self.sessions);
+
     }
 }
