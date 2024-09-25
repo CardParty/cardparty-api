@@ -1,7 +1,7 @@
 use crate::api_structures::messages::{AddPlayer, CloseSession, GetHostId, GetSessionId};
 use crate::api_structures::session::Session;
 use crate::api_structures::session_connection::SessionConnection;
-use crate::api_structures::{id::*, session};
+use crate::api_structures::{id::*};
 use actix::{Actor, Addr, Context, Handler};
 use futures::executor::block_on;
 use std::sync::{Arc, Mutex};
@@ -9,8 +9,9 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct SessionManager {
-    pub sessions: Vec<Addr<Session>>,
+    pub sessions: Arc<Mutex<Vec<Addr<Session>>>>,
 }
+
 #[derive(Debug)]
 pub enum SessionManagerError {
     UserSessionInstanceAlreadyExists,
@@ -24,7 +25,7 @@ impl Actor for SessionManager {
 impl SessionManager {
     pub fn new() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {
-            sessions: Vec::new(),
+            sessions: Arc::new(Mutex::new(Vec::new())),
         }))
     }
 
@@ -33,12 +34,13 @@ impl SessionManager {
         host_id: UserId,
         username: String,
     ) -> Result<SessionId, SessionManagerError> {
-        for session in &self.sessions {
+        let sessions = self.sessions.lock().unwrap();
+        for session in sessions.iter() {
             let session_host_id = session
                 .send(GetHostId())
                 .await
-                .expect("getting host id failed");
-            if Uuid::parse_str(&session_host_id).expect("parsing uuid failed") == host_id {
+                .expect("Failed to get host id");
+            if Uuid::parse_str(&session_host_id).expect("Failed to parse UUID") == host_id {
                 return Err(SessionManagerError::UserSessionInstanceAlreadyExists);
             }
         }
@@ -46,8 +48,9 @@ impl SessionManager {
         let man_addr = self.clone().start();
 
         let (addr, id) = Session::init(host_id, username, man_addr).await;
+        drop(sessions);
 
-        self.sessions.push(addr.clone());
+        self.sessions.lock().unwrap().push(addr.clone());
         Ok(id)
     }
 
@@ -57,14 +60,13 @@ impl SessionManager {
         user_id: UserId,
         username: String,
     ) -> Option<SessionConnection> {
-        println!("Joining session: {:?}", session_id);
-        println!("Sessions: {:?}", self.sessions);
-        for session in &self.sessions {
+        let sessions = self.sessions.lock().unwrap();
+        for session in sessions.iter() {
             let session_id_res = session
                 .send(GetSessionId())
                 .await
-                .expect("getting session id failed");
-            if Uuid::parse_str(&session_id_res).expect("parsing uuid failed") == session_id {
+                .expect("Failed to get session id");
+            if Uuid::parse_str(&session_id_res).expect("Failed to parse UUID") == session_id {
                 let conn = session
                     .send(AddPlayer {
                         id: user_id,
@@ -85,22 +87,17 @@ impl SessionManager {
 impl Handler<CloseSession> for SessionManager {
     type Result = ();
 
-    fn handle(&mut self, msg: CloseSession, ctx: &mut Self::Context) -> Self::Result {
-        println!("Closing session: {:?}", msg.0);
-        println!("Sessions pointer address {:p}", &self.sessions);
-        self.sessions.retain(|session| {
+    fn handle(&mut self, msg: CloseSession, _ctx: &mut Self::Context) -> Self::Result {
+        let mut sessions = self.sessions.lock().unwrap();
+            sessions.retain(|session| {
             let id = block_on(async {
                 let s = session
                     .send(GetSessionId())
                     .await
-                    .expect("jaja mnie swędzą");
-                Uuid::parse_str(&s).expect("uuid wykurwiło sie XDDD")
+                    .expect("Failed to get session id");
+                Uuid::parse_str(&s).expect("Failed to parse UUID")
             });
-            println!("{}", msg.0 == id);
-            msg.0 == id
+            msg.0 != id
         });
-        println!("{}", self.sessions.len());
-        println!("{:?}", self.sessions);
-
     }
 }
