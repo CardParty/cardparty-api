@@ -54,6 +54,9 @@ pub enum Packet {
         token: Uuid,
     },
     TestError {},
+    TestPacketWithString {
+        string: String,
+    },
 
     // API <- CLIENT
     SetDeck {
@@ -77,6 +80,7 @@ pub enum PacketResponse {
 
     // API <-> CLIENT
     AdminTokenOk,
+    TestPacketWithStringOk { string: String },
 
     // API <- CLIENT
     SetDeckOk,

@@ -237,6 +237,9 @@ impl Handler<SendPacket> for Session {
                 return Ok(PacketResponse::CloseSessionOk);
             }
             super::packet_parser::Packet::TestError {} => return Err(PacketError::CipaChuj),
+            super::packet_parser::Packet::TestPacketWithString { string } => {
+                return Ok(PacketResponse::TestPacketWithStringOk { string });
+            }
             _ => Err(PacketError::CipaChuj),
         }
     }

@@ -1,7 +1,7 @@
 use crate::api_structures::{messages::*, packet_parser::deserialize_json};
 
-use super::id::*;
 use super::session::Session;
+use super::{id::*, packet_parser::PacketResponse};
 use actix::{Actor, Addr, Handler, StreamHandler};
 use actix_web_actors::ws;
 use futures::executor::block_on;
@@ -38,7 +38,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                 let response = block_on(async { self.session.send(SendPacket(packet)).await? });
 
                 match response {
-                    Ok(resp) => {}
+                    Ok(resp) => match resp {
+                        PacketResponse::TestPacketWithStringOk { string } => {
+                            ctx.text(string);
+                        }
+                        _ => {}
+                    },
                     Err(err) => {
                         ctx.text("ajaj cos sie wyjebało");
                     }
