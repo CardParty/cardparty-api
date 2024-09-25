@@ -1,33 +1,36 @@
-use std::collections::HashMap;
+use super::managers::session_manager::SessionManager;
+use super::messages::{
+    AddConnection, AddPlayer, CloseSession, CloseSessionConnection, GetHostId, GetSessionId,
+    SendPacket, SendToClient, VerifyExistence,
+};
+
+use super::packet_parser::{PacketError, PacketResponse};
+use super::session_connection::SessionConnection;
+use crate::api_structures::card_game::deck::DeckBundle;
 use crate::api_structures::id::*;
+use crate::api_structures::managers::game_manager::GameManager;
 use crate::api_structures::messages::BroadcastMessage;
 use crate::api_structures::messages::TestMessage;
-use actix::{Actor, Addr, Context, Handler, StreamHandler};
-use actix_web_actors::ws;
-use serde::{Deserialize, Serialize};
-use serde_json::{from_value, Value};
-use uuid::Uuid;
-use crate::api_structures::card_game::deck::DeckBundle;
-use crate::api_structures::managers::game_manager::{GameManager, GameState};
-use super::packet_parser::*;
-use super::messages::{
-    AddConnection, AddPlayer, ConnectWithSession, GetHostId, GetSessionId, SendToClient,
-    VerifyExistence,
-};
-#[derive(Debug)]
-pub enum SessionError {}
+use actix::{Actor, Addr, Context, Handler};
 
+use serde::{Deserialize, Serialize};
+
+use uuid::Uuid;
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub enum SessionError {}
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Player {
     pub username: String,
     pub id: UserId,
     is_host: bool,
 }
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub enum SessionFlag {
-    AwatingHost,
+pub enum SessionState {
     Lobby,
+    PreGame,
     Game,
+    PostGame,
 }
 impl Player {
     pub fn new(id: UserId, username: String, is_host: bool) -> Self {
@@ -39,85 +42,6 @@ impl Player {
     }
 }
 
-pub struct SessionConnection {
-    session: Addr<Session>,
-    user_id: UserId,
-    id: Uuid,
-    is_admin: bool,
-}
-
-impl SessionConnection {
-    pub fn new(user_id: UserId, session: Addr<Session>, is_admin: bool) -> Self {
-        Self {
-            user_id,
-            session,
-            id: Uuid::new_v4(),
-            is_admin,
-        }
-    }
-}
-
-impl Actor for SessionConnection {
-    type Context = ws::WebsocketContext<Self>;
-}
-
-
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection {
-    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        match msg {
-            Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
-            Ok(ws::Message::Text(text)) => {
-                let split: Vec<String> = text
-                    .parse::<String>()
-                    .expect("failed to parse websocket string")
-                    .split(' ')
-                    .map(String::from)
-                    .collect();
-
-                if let Some(str) = split.first() {
-                    if str.starts_with("send_all") {
-                        self.session.do_send(BroadcastMessage(split[1..].join(" ")));
-                        println!(
-                            "Deserialized packet: {:?}",
-                            deserialize_json(split[1..].join(" ").as_str())
-                        );
-                    } else {
-                        println!("Deserialized packet: {:?}", deserialize_json(split.join(" ").as_str()));
-                        self.session
-                            .do_send(TestMessage(text.parse::<String>().unwrap()));
-                    }
-                } else {
-                    self.session
-                        .do_send(TestMessage(text.parse::<String>().unwrap()));
-                }
-            }
-            _ => (),
-        }
-    }
-}
-
-impl Handler<TestMessage> for SessionConnection {
-    type Result = ();
-
-    fn handle(&mut self, msg: TestMessage, ctx: &mut Self::Context) {
-        ctx.text(msg.0);
-    }
-}
-
-impl Handler<SendToClient> for SessionConnection {
-    type Result = ();
-    fn handle(&mut self, msg: SendToClient, ctx: &mut Self::Context) -> Self::Result {
-        ctx.text(msg.0);
-    }
-}
-
-impl Handler<ConnectWithSession> for SessionConnection {
-    type Result = ();
-
-    fn handle(&mut self, msg: ConnectWithSession, _ctx: &mut Self::Context) -> Self::Result {
-        self.session.do_send(AddConnection(msg.0))
-    }
-}
 #[derive(Clone)]
 pub struct Session {
     pub id: SessionId,
@@ -125,7 +49,9 @@ pub struct Session {
     pub host_id: Uuid,
     pub players: Vec<Player>,
     pub admin_token: Uuid,
-    pub game_manager:Option<GameManager>
+    pub game_manager: Option<GameManager>,
+    pub session_state: SessionState,
+    pub manager_addr: Addr<SessionManager>,
 }
 
 impl Actor for Session {
@@ -133,7 +59,11 @@ impl Actor for Session {
 }
 
 impl Session {
-    pub async fn init(host_id: UserId, _username: String) -> (Addr<Self>, SessionId) {
+    pub async fn init(
+        host_id: UserId,
+        _username: String,
+        manager_addr: Addr<SessionManager>,
+    ) -> (Addr<Self>, SessionId) {
         let id = Uuid::new_v4();
         let addr = Self {
             id,
@@ -141,7 +71,9 @@ impl Session {
             connections: Vec::new(),
             players: Vec::new(),
             admin_token: Uuid::new_v4(),
-            game_manager:None,
+            game_manager: None,
+            session_state: SessionState::Lobby,
+            manager_addr,
         }
         .start();
 
@@ -152,6 +84,18 @@ impl Session {
     }
     pub fn get_game_manager(self) -> GameManager {
         self.game_manager.unwrap()
+    }
+    pub fn advance_state(&mut self) {
+        match self.session_state {
+            SessionState::Lobby => self.session_state = SessionState::PreGame,
+            SessionState::PreGame => self.session_state = SessionState::Game,
+            SessionState::Game => self.session_state = SessionState::PostGame,
+            SessionState::PostGame => self.session_state = SessionState::Lobby,
+        }
+    }
+
+    pub fn get_state(self) -> SessionState {
+        self.session_state
     }
 }
 
@@ -211,5 +155,86 @@ impl Handler<AddConnection> for Session {
 
     fn handle(&mut self, msg: AddConnection, _ctx: &mut Self::Context) -> Self::Result {
         self.connections.push(msg.0);
+    }
+}
+
+impl Handler<SendPacket> for Session {
+    type Result = Result<PacketResponse, PacketError>;
+
+    fn handle(&mut self, msg: SendPacket, ctx: &mut Self::Context) -> Self::Result {
+        match msg.0 {
+            super::packet_parser::Packet::UpdateState { new_state } => {
+                // ignore
+                todo!()
+            }
+            super::packet_parser::Packet::FinishGame {} => {
+                // so reset the whole session to a lobby state,
+                // aka set state to Lobby, Remove all game_state stuff ect.
+
+                self.session_state = SessionState::Lobby;
+                if let Some(game_manager) = self.game_manager.as_mut() {
+                    game_manager.reset_game_state();
+                    Ok(PacketResponse::FinishGameOk)
+                } else {
+                    Err(PacketError::DziwkaToTrojmiasto)
+                }
+            }
+            super::packet_parser::Packet::SetDeck { deck } => {
+                if let Some(game_manager) = self.game_manager.as_mut() {
+                    game_manager.change_deck(deck.into_bundle());
+                    Ok(PacketResponse::SetDeckOk)
+                } else {
+                    return Err(PacketError::DziwkaToTrojmiasto);
+                }
+                //ignore: Nie ma metody do dodania decku
+            }
+            super::packet_parser::Packet::PlayerLeft { id } => {
+                // use the remove_player methods on tgame_state, remove player from players in session,
+                // close the websocket ect.
+                // also choose a random player  as host idc which one lol.
+                // If no players remain close session.
+                if let Some(game_manager) = self.game_manager.as_mut() {
+                    self.game_manager.as_mut().unwrap().remove_player(id);
+                    self.players.retain(|x| x.id != id);
+                    if self.players.len() == 0 {
+                        self.session_state = SessionState::Lobby;
+
+                        for conn in &self.connections {
+                            conn.do_send(CloseSessionConnection);
+                        }
+                        self.manager_addr.do_send(CloseSession(self.id.clone()));
+                        return Ok(PacketResponse::CloseSessionOk);
+                    } else {
+                        self.host_id = self.players[0].id;
+                        Ok(PacketResponse::PlayerLeftOk)
+                    }
+                } else {
+                    return Err(PacketError::DziwkaToTrojmiasto);
+                }
+            }
+            super::packet_parser::Packet::PlayerDoneChoise { chosen_state_id } => {
+                // use resolve_state method to resolve the state
+                self.game_manager
+                    .as_mut()
+                    .unwrap()
+                    .resolve_state(chosen_state_id);
+                Ok(PacketResponse::PlayerDoneChoiseOk)
+            }
+            super::packet_parser::Packet::PlayerDone {} => {
+                // go to next player and render new card
+                self.game_manager.as_mut().unwrap().next_player();
+                Ok(PacketResponse::PlayerDoneOk)
+            }
+            super::packet_parser::Packet::CloseSession {} => {
+                // Close all websocket connections
+                // Use session manager to close this session.
+                for conn in self.connections.clone() {
+                    conn.do_send(CloseSessionConnection);
+                }
+                self.manager_addr.do_send(CloseSession(self.id.clone()));
+                return Ok(PacketResponse::CloseSessionOk);
+            }
+            _ => Err(PacketError::CipaChuj),
+        }
     }
 }

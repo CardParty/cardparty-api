@@ -1,13 +1,17 @@
 use actix::{Addr, Message};
+use uuid::Uuid;
 
 use super::{
-    id::{SessionId, UserId},
+    id::{self, SessionId, UserId},
+    packet_parser::{Packet, PacketResponse},
     session::Session,
 };
-use crate::api_structures::session::{SessionConnection, SessionError}; // Import the missing type SessionConnection
-                                                                       // TEMPLATE
+use crate::api_structures::packet_parser::PacketError;
+use crate::api_structures::session::SessionError;
+use crate::api_structures::session_connection::SessionConnection;
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
+#[allow(dead_code)]
 pub struct TemplateDontUse();
 
 #[derive(Message, Debug)]
@@ -52,3 +56,15 @@ pub struct SendToClient(pub String);
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub struct ConnectWithSession(pub Addr<SessionConnection>);
+
+#[derive(Message, Debug)]
+#[rtype(result = "Result<PacketResponse, PacketError>")]
+pub struct SendPacket(pub Packet);
+
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct CloseSessionConnection;
+
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct CloseSession(pub Uuid);
