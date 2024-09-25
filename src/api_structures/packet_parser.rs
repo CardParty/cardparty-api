@@ -53,6 +53,7 @@ pub enum Packet {
     AdminToken {
         token: Uuid,
     },
+    TestError {},
 
     // API <- CLIENT
     SetDeck {
