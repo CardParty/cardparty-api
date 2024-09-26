@@ -1,9 +1,5 @@
 use crate::api_structures::{api_state::ApiState, id::*, messages::ConnectWithSession};
-use actix_web::{
-    post,
-    web::{self},
-    HttpRequest, HttpResponse, Responder, Scope,
-};
+use actix_web::{get, post, web::{self}, HttpRequest, HttpResponse, Responder, Scope};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -49,7 +45,22 @@ async fn create_game(
         HttpResponse::BadRequest().body("Invalid host_id")
     }
 }
+#[get("/games")]
+async fn get_games(data: web::Data<Arc<Mutex<ApiState>>>) -> impl Responder {
 
+    let state = data.lock().expect("failed to lock state");
+    let session_manager = state
+        .session_manager
+        .lock()
+        .expect("failed to lock session manager");
+
+    let sessions = session_manager.get_games().await;
+    if sessions.is_empty() {
+        return HttpResponse::NoContent().finish();
+    }
+    HttpResponse::Ok().json(sessions)
+
+}
 async fn join_game(
     data: web::Data<Arc<Mutex<ApiState>>>,
     stream: web::Payload,
@@ -85,4 +96,5 @@ pub fn game_scope() -> Scope {
     Scope::new("/game")
         .service(create_game)
         .route("/join", web::get().to(join_game))
+        .service(get_games)
 }

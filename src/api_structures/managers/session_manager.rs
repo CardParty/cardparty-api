@@ -85,6 +85,31 @@ impl SessionManager {
         }
         None
     }
+    pub async fn get_games(&self) -> Vec<Uuid> {
+        let sessions = self.sessions.clone();
+        let mut ret_ids: Vec<Uuid> = Vec::new();
+
+        // Spawning an async block to run the tasks
+        let ids = spawn(async move {
+            let session_ids: Vec<Option<Uuid>> = {
+                let sessions = sessions.lock().unwrap();
+                let futures = sessions.iter().map(|session| {
+                    let session = session.clone();
+                    async move {
+                        let session_id_res = session.send(GetSessionId()).await.ok();
+                        session_id_res.and_then(|id| Uuid::parse_str(&id).ok())
+                    }
+                });
+                join_all(futures).await
+            };
+
+
+            session_ids.into_iter().filter_map(|id| id).collect::<Vec<Uuid>>()
+        }).await.unwrap();
+
+        ret_ids = ids.clone();
+        ret_ids
+    }
 }
 
 impl Handler<CloseSession> for SessionManager {
