@@ -43,6 +43,8 @@ pub enum Packet {
     UpdateState {
         new_state: GameState,
     },
+    PlayersUpdate {
+    },
     CardResult {
         state_options: Vec<StateOption>,
         text: String,
@@ -92,6 +94,9 @@ pub enum PacketResponse {
     CloseSessionOk,
     PlayerDoneOk,
     GetPlayersOk {players: Vec<String>},
+    PlayersUpdateOk {
+        players: Vec<String>
+    },
 }
 
 pub fn deserialize_json(json: &str) -> Packet {
