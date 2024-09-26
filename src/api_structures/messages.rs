@@ -68,3 +68,7 @@ pub struct CloseSessionConnection;
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub struct CloseSession(pub Uuid);
+
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct PlayerUpdate(pub Vec<String>);

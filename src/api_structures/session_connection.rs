@@ -81,3 +81,13 @@ impl Handler<CloseSessionConnection> for SessionConnection {
         ctx.close(None);
     }
 }
+
+impl Handler<PlayerUpdate> for SessionConnection {
+    type Result = ();
+
+    fn handle(&mut self, msg: PlayerUpdate, ctx: &mut Self::Context) -> Self::Result {
+        ctx.text(
+            serde_json::to_string(&PacketResponse::PlayersUpdateOk { players: msg.0 }).unwrap(),
+        );
+    }
+}

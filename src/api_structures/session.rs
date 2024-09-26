@@ -1,7 +1,7 @@
 use super::managers::session_manager::SessionManager;
 use super::messages::{
     AddConnection, AddPlayer, CloseSession, CloseSessionConnection, GetHostId, GetSessionId,
-    SendPacket, SendToClient, VerifyExistence,
+    PlayerUpdate, SendPacket, SendToClient, VerifyExistence,
 };
 
 use super::packet_parser::{PacketError, PacketResponse};
@@ -125,10 +125,25 @@ impl Handler<AddPlayer> for Session {
             .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
         if self.players.len() == 1 {
             let conn = SessionConnection::new(msg.id, msg.session_addr, true);
-
+            let players = self
+                .players
+                .iter()
+                .map(|x| x.username.clone())
+                .collect::<Vec<String>>();
+            for conn in self.connections.clone() {
+                conn.do_send(PlayerUpdate(players.clone()));
+            }
             Ok(conn)
         } else {
             let conn = SessionConnection::new(msg.id, msg.session_addr, false);
+            let players = self
+                .players
+                .iter()
+                .map(|x| x.username.clone())
+                .collect::<Vec<String>>();
+            for conn in self.connections.clone() {
+                conn.do_send(PlayerUpdate(players.clone()));
+            }
             Ok(conn)
         }
     }
