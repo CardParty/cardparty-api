@@ -1,17 +1,20 @@
 use crate::api_structures::id::*;
 use crate::api_structures::messages::{AddPlayer, CloseSession, GetHostId, GetSessionId};
-use crate::api_structures::session::{self, Session};
+use crate::api_structures::session::{self, Session, SessionCode};
 use crate::api_structures::session_connection::SessionConnection;
 use actix::{fut, spawn, Actor, Addr, Context, Handler};
 use actix_web::guard::Get;
 use futures::executor::block_on;
 use futures::future::join_all;
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct SessionManager {
     pub sessions: Arc<Mutex<Vec<Addr<Session>>>>,
+    pub session_codes: Arc<Mutex<HashMap<SessionCode, SessionId>>>,
 }
 
 #[derive(Debug)]
@@ -28,6 +31,7 @@ impl SessionManager {
     pub fn new() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {
             sessions: Arc::new(Mutex::new(Vec::new())),
+            session_codes: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
 
@@ -35,7 +39,7 @@ impl SessionManager {
         &mut self,
         host_id: UserId,
         username: String,
-    ) -> Result<SessionId, SessionManagerError> {
+    ) -> Result<(SessionId, SessionCode), SessionManagerError> {
         let sessions = self.sessions.lock().expect("aaa");
         for session in sessions.iter() {
             let session_host_id = session
@@ -49,13 +53,35 @@ impl SessionManager {
 
         let man_addr = self.clone().start();
 
-        let (addr, id) = Session::init(host_id, username, man_addr).await;
         drop(sessions);
 
-        self.sessions.lock().expect("sigma").push(addr.clone());
-        Ok(id)
-    }
+        let mut code = SessionCode::gen();
+        let mut codes = self.session_codes.lock().unwrap();
+        while codes
+            .keys()
+            .into_iter()
+            .collect::<Vec<&SessionCode>>()
+            .contains(&&code)
+        {
+            code.regen();
+        }
 
+        let (addr, id) = Session::init(host_id, username, man_addr, code.clone()).await;
+
+        codes.insert(code.clone(), id);
+
+        self.sessions.lock().expect("sigma").push(addr.clone());
+        Ok((id, code.clone()))
+    }
+    pub fn unwrap_code(&self, code: SessionCode) -> Option<String> {
+        let session_codes = self.session_codes.lock().unwrap();
+
+        if let Some(code) = session_codes.get(&code) {
+            Some(code.to_string())
+        } else {
+            None
+        }
+    }
     pub async fn join_session(
         &mut self,
         session_id: SessionId,
@@ -103,9 +129,13 @@ impl SessionManager {
                 join_all(futures).await
             };
 
-
-            session_ids.into_iter().filter_map(|id| id).collect::<Vec<Uuid>>()
-        }).await.unwrap();
+            session_ids
+                .into_iter()
+                .filter_map(|id| id)
+                .collect::<Vec<Uuid>>()
+        })
+        .await
+        .unwrap();
 
         ret_ids = ids.clone();
         ret_ids
