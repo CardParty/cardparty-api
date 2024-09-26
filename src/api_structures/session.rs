@@ -240,6 +240,14 @@ impl Handler<SendPacket> for Session {
             super::packet_parser::Packet::TestPacketWithString { string } => {
                 return Ok(PacketResponse::TestPacketWithStringOk { string });
             }
+            super::packet_parser::Packet::GetPlayers {} => {
+                let players = self
+                    .players
+                    .iter()
+                    .map(|x| x.username.clone())
+                    .collect::<Vec<String>>();
+                Ok(PacketResponse::GetPlayersOk { players })
+            }
             _ => Err(PacketError::CipaChuj),
         }
     }

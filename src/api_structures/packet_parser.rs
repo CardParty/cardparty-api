@@ -70,6 +70,7 @@ pub enum Packet {
     },
     PlayerDone {},
     CloseSession {},
+    GetPlayers {},
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -90,6 +91,7 @@ pub enum PacketResponse {
     PlayerDoneChoiseOk,
     CloseSessionOk,
     PlayerDoneOk,
+    GetPlayersOk {players: Vec<String>},
 }
 
 pub fn deserialize_json(json: &str) -> Packet {
