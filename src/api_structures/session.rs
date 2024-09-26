@@ -1,9 +1,10 @@
+use std::ops::Deref;
+
 use super::managers::session_manager::SessionManager;
 use super::messages::{
     AddConnection, AddPlayer, CloseSession, CloseSessionConnection, GetHostId, GetSessionId,
     PlayerUpdate, SendPacket, SendToClient, VerifyExistence,
 };
-
 use super::packet_parser::{PacketError, PacketResponse};
 use super::session_connection::SessionConnection;
 use crate::api_structures::card_game::deck::DeckBundle;
@@ -12,8 +13,23 @@ use crate::api_structures::managers::game_manager::GameManager;
 use crate::api_structures::messages::BroadcastMessage;
 use crate::api_structures::messages::TestMessage;
 use actix::{Actor, Addr, Context, Handler};
+use rand::prelude::*;
 
 use serde::{Deserialize, Serialize};
+
+fn generate_random_string(length: usize) -> String {
+    // Define the character set: lowercase a-z and digits 0-9
+    let chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let mut rng = rand::thread_rng();
+
+    // Generate a random string
+    (0..length)
+        .map(|_| {
+            let index = rng.gen_range(0..chars.len()); // Generate a random index
+            chars.chars().nth(index).unwrap() // Get the character at that index
+        })
+        .collect() // Collect into a String
+}
 
 use uuid::Uuid;
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -42,6 +58,26 @@ impl Player {
     }
 }
 
+#[derive(PartialEq, Eq, Hash, Clone)]
+pub struct SessionCode {
+    pub code: String,
+}
+
+impl SessionCode {
+    pub fn gen() -> Self {
+        Self {
+            code: generate_random_string(6),
+        }
+    }
+    pub fn regen(&mut self) {
+        self.code = generate_random_string(6)
+    }
+
+    pub fn from(str: String) -> Self {
+        Self { code: str }
+    }
+}
+
 #[derive(Clone)]
 pub struct Session {
     pub id: SessionId,
@@ -52,6 +88,7 @@ pub struct Session {
     pub game_manager: Option<GameManager>,
     pub session_state: SessionState,
     pub manager_addr: Addr<SessionManager>,
+    pub code: SessionCode,
 }
 
 impl Actor for Session {
@@ -63,6 +100,7 @@ impl Session {
         host_id: UserId,
         _username: String,
         manager_addr: Addr<SessionManager>,
+        code: SessionCode,
     ) -> (Addr<Self>, SessionId) {
         let id = Uuid::new_v4();
         let addr = Self {
@@ -74,6 +112,7 @@ impl Session {
             game_manager: None,
             session_state: SessionState::Lobby,
             manager_addr,
+            code,
         }
         .start();
 
