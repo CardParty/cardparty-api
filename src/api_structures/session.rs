@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use super::managers::session_manager::SessionManager;
 use super::messages::{
     AddConnection, AddPlayer, CloseSession, CloseSessionConnection, GetHostId, GetSessionId,
@@ -20,7 +18,7 @@ use serde::{Deserialize, Serialize};
 fn generate_random_string(length: usize) -> String {
     // Define the character set: lowercase a-z and digits 0-9
     let chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-    let mut rng = rand::thread_rng();
+    let mut rng = thread_rng();
 
     // Generate a random string
     (0..length)
@@ -215,9 +213,9 @@ impl Handler<AddConnection> for Session {
 impl Handler<SendPacket> for Session {
     type Result = Result<PacketResponse, PacketError>;
 
-    fn handle(&mut self, msg: SendPacket, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: SendPacket, _ctx: &mut Self::Context) -> Self::Result {
         match msg.0 {
-            super::packet_parser::Packet::UpdateState { new_state } => {
+            super::packet_parser::Packet::UpdateState { new_state: _new_state } => {
                 // ignore
                 todo!()
             }
@@ -230,7 +228,7 @@ impl Handler<SendPacket> for Session {
                     game_manager.reset_game_state();
                     Ok(PacketResponse::FinishGameOk)
                 } else {
-                    Err(PacketError::DziwkaToTrojmiasto)
+                    Err(PacketError::GameManagerError)
                 }
             }
             super::packet_parser::Packet::SetDeck { deck } => {
@@ -238,7 +236,7 @@ impl Handler<SendPacket> for Session {
                     game_manager.change_deck(deck.into_bundle());
                     Ok(PacketResponse::SetDeckOk)
                 } else {
-                    return Err(PacketError::DziwkaToTrojmiasto);
+                    Err(PacketError::GameManagerError)
                 }
                 //ignore: Nie ma metody do dodania decku
             }
@@ -247,7 +245,7 @@ impl Handler<SendPacket> for Session {
                 // close the websocket ect.
                 // also choose a random player  as host idc which one lol.
                 // If no players remain close session.
-                if let Some(game_manager) = self.game_manager.as_mut() {
+                if let Some(_game_manager) = self.game_manager.as_mut() {
                     self.game_manager.as_mut().unwrap().remove_player(id);
                     self.players.retain(|x| x.id != id);
                     if self.players.len() == 0 {
@@ -257,13 +255,13 @@ impl Handler<SendPacket> for Session {
                             conn.do_send(CloseSessionConnection);
                         }
                         self.manager_addr.do_send(CloseSession(self.id.clone()));
-                        return Ok(PacketResponse::CloseSessionOk);
+                        Ok(PacketResponse::CloseSessionOk)
                     } else {
                         self.host_id = self.players[0].id;
                         Ok(PacketResponse::PlayerLeftOk)
                     }
                 } else {
-                    return Err(PacketError::DziwkaToTrojmiasto);
+                    Err(PacketError::GameManagerError)
                 }
             }
             super::packet_parser::Packet::PlayerDoneChoise { chosen } => {
@@ -280,16 +278,14 @@ impl Handler<SendPacket> for Session {
                 // Close all websocket connections
                 // Use session manager to close this session.
                 for conn in self.connections.clone() {
-                    println!("closing conn");
                     conn.do_send(CloseSessionConnection);
                 }
                 self.manager_addr.do_send(CloseSession(self.id.clone()));
-                println!("To ja jestem sigmą");
-                return Ok(PacketResponse::CloseSessionOk);
+                Ok(PacketResponse::CloseSessionOk)
             }
-            super::packet_parser::Packet::TestError {} => return Err(PacketError::CipaChuj),
+            super::packet_parser::Packet::TestError {} => Err(PacketError::CipaChuj),
             super::packet_parser::Packet::TestPacketWithString { string } => {
-                return Ok(PacketResponse::TestPacketWithStringOk { string });
+                Ok(PacketResponse::TestPacketWithStringOk { string })
             }
             super::packet_parser::Packet::GetPlayers {} => {
                 let players = self

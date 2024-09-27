@@ -77,7 +77,7 @@ impl Handler<ConnectWithSession> for SessionConnection {
 impl Handler<CloseSessionConnection> for SessionConnection {
     type Result = ();
 
-    fn handle(&mut self, msg: CloseSessionConnection, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: CloseSessionConnection, ctx: &mut Self::Context) -> Self::Result {
         ctx.close(None);
     }
 }

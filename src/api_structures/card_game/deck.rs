@@ -187,7 +187,7 @@ pub struct Value {
 }
 
 impl Value {
-    pub fn new(value: String, tags: Vec<String>) {}
+    pub fn new() {}
     pub fn has_tag(&self, tag: &String) -> bool {
         self.tags.contains(tag)
     }
@@ -223,16 +223,16 @@ impl Deck {
             }
         }
 
-        let mut segmentized_cards = Vec::new();
+        let mut segmented_cards = Vec::new();
         for card in self.cards {
-            segmentized_cards.push(into_segments(card));
+            segmented_cards.push(into_segments(card));
         }
 
         DeckBundle {
             score_state: self.score_state,
             tables: table_hash,
             states: state_hash,
-            cards: segmentized_cards,
+            cards: segmented_cards,
         }
     }
 }
@@ -264,13 +264,8 @@ pub fn into_segments(raw_string: String) -> Vec<ParserSegment> {
 
     match DyncodeParser::parse(Rule::result, &raw_string) {
         Ok(parsed) => {
-            // println!("Parsed successfully:\n{:#?}", parsed);
             for pair in parsed {
-                print!(
-                    "Rule: {:?}, Span: {:?}\n",
-                    pair.as_rule(),
-                    pair.as_span().as_str()
-                );
+
                 match pair.as_rule() {
                     Rule::result => {
                         for inner_pair in pair.into_inner() {
@@ -279,7 +274,7 @@ pub fn into_segments(raw_string: String) -> Vec<ParserSegment> {
                                     let raw_text = inner_pair.as_str().to_string();
                                     segments.push(ParserSegment::RawText(raw_text));
                                 }
-                                //sigma code
+
                                 Rule::braced_content => {
                                     let dyn_code = inner_pair
                                         .into_inner()
@@ -290,19 +285,18 @@ pub fn into_segments(raw_string: String) -> Vec<ParserSegment> {
                                     segments.push(ParserSegment::DynCode(dyn_code));
                                 }
                                 _ => {
-                                    println!("Unknown rule: {:?}", inner_pair.as_rule());
+
                                 }
                             }
                         }
                     }
                     _ => {
-                        println!("Unknown rule: {:?}", pair.as_rule());
+
                     }
                 }
             }
         }
-        Err(e) => {
-            println!("Error parsing: {}", e);
+        Err(_e) => {
         }
     }
 

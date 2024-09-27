@@ -1,4 +1,3 @@
-use crate::api_structures::card_game::deck::Deck;
 use crate::api_structures::card_game::deck::MathOperation;
 use crate::api_structures::card_game::deck::Operation;
 use crate::api_structures::card_game::deck::Selector;
@@ -80,7 +79,7 @@ impl GameManager {
                 match seg {
                     ParserSegment::DynCode(raw) => ops.push(into_operation(raw)),
                     ParserSegment::RawText(raw) => {
-                        ops.push(crate::api_structures::card_game::deck::Operation::RawText(
+                        ops.push(Operation::RawText(
                             raw,
                         ));
                     }
@@ -156,7 +155,7 @@ impl GameManager {
                         };
                     }
                     StateModule::GlobalState { template: _, map } => {
-                        let (value, min, max) = map.get_mut(&player_id).unwrap();
+                        let (value, _min, _max) = map.get_mut(&player_id).unwrap();
                         *value = match state.math_operation {
                             MathOperation::Add => *value + new_value,
                             MathOperation::Sub => *value - new_value,
@@ -303,7 +302,7 @@ impl GameManager {
                 match seg {
                     ParserSegment::DynCode(raw) => ops.push(into_operation(raw)),
                     ParserSegment::RawText(raw) => {
-                        ops.push(crate::api_structures::card_game::deck::Operation::RawText(
+                        ops.push(Operation::RawText(
                             raw,
                         ));
                     }
