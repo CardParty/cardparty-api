@@ -69,7 +69,7 @@ pub enum Packet {
         id: Uuid,
     },
     PlayerDoneChoise {
-        chosen_state_id: Uuid,
+        chosen: Uuid,
     },
     PlayerDone {},
     CloseSession {},

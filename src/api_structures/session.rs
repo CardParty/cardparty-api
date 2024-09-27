@@ -266,12 +266,9 @@ impl Handler<SendPacket> for Session {
                     return Err(PacketError::DziwkaToTrojmiasto);
                 }
             }
-            super::packet_parser::Packet::PlayerDoneChoise { chosen_state_id } => {
+            super::packet_parser::Packet::PlayerDoneChoise { chosen } => {
                 // use resolve_state method to resolve the state
-                self.game_manager
-                    .as_mut()
-                    .unwrap()
-                    .resolve_state(chosen_state_id);
+                self.game_manager.as_mut().unwrap().resolve_state(chosen);
                 Ok(PacketResponse::PlayerDoneChoiseOk)
             }
             super::packet_parser::Packet::PlayerDone {} => {
