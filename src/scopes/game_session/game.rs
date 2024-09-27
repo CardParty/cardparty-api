@@ -73,7 +73,7 @@ async fn get_games(data: web::Data<Arc<Mutex<ApiState>>>) -> impl Responder {
     HttpResponse::Ok().json(sessions)
 }
 
-#[get("/unwrap_session_code")]
+#[post("/unwrap_session_code")]
 async fn unwrap_session_code(
     data: web::Data<Arc<Mutex<ApiState>>>,
     context: web::Json<String>,
