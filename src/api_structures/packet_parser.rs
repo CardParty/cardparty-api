@@ -23,10 +23,12 @@ pub struct Value {
 pub struct State {
     value: i32,
 }
-
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "error")]
 pub enum PacketError {
     CipaChuj,
     DziwkaToTrojmiasto,
+    #[serde(skip)]
     MailboxError(MailboxError),
 }
 
@@ -43,8 +45,7 @@ pub enum Packet {
     UpdateState {
         new_state: GameState,
     },
-    PlayersUpdate {
-    },
+    PlayersUpdate {},
     CardResult {
         state_options: Vec<StateOption>,
         text: String,
@@ -93,10 +94,8 @@ pub enum PacketResponse {
     PlayerDoneChoiseOk,
     CloseSessionOk,
     PlayerDoneOk,
-    GetPlayersOk {players: Vec<String>},
-    PlayersUpdateOk {
-        players: Vec<String>
-    },
+    GetPlayersOk { players: Vec<String> },
+    PlayersUpdateOk { players: Vec<String> },
 }
 
 pub fn deserialize_json(json: &str) -> Packet {

@@ -42,7 +42,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
                         serde_json::to_string(&resp).expect("Failed to serialze Packet Response"),
                     ),
                     Err(err) => {
-                        ctx.text("ajaj cos sie wyjebało");
+                        ctx.text(serde_json::to_string(&err).expect("Failed to serialize Error"));
                     }
                 }
             }
