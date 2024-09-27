@@ -1,7 +1,6 @@
 use crate::api_structures::{
     api_state::ApiState, id::*, messages::ConnectWithSession, session::SessionCode,
 };
-use actix::Handler;
 use actix_web::{
     get, post,
     web::{self},

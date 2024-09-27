@@ -223,7 +223,7 @@ impl GameManager {
         self.game_state.card_count += 1;
 
         let mut buffer: Vec<String> = Vec::new();
-        let mut state_options: Vec<StateOption> = Vec::new();
+        let state_options: Vec<StateOption> = Vec::new();
 
         for op in card.operations {
             match op {

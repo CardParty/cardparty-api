@@ -5,7 +5,6 @@ use crate::api_structures::session_connection::SessionConnection;
 use actix::{ spawn, Actor, Addr, Context, Handler};
 use futures::future::join_all;
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -111,7 +110,6 @@ impl SessionManager {
     }
     pub async fn get_games(&self) -> Vec<Uuid> {
         let sessions = self.sessions.clone();
-        let mut ret_ids: Vec<Uuid> = Vec::new();
 
         // Spawning an async block to run the tasks
         let ids = spawn(async move {
@@ -135,7 +133,7 @@ impl SessionManager {
         .await
         .unwrap();
 
-        ret_ids = ids.clone();
+        let ret_ids = ids.clone();
         ret_ids
     }
 }
@@ -162,7 +160,7 @@ impl Handler<CloseSession> for SessionManager {
             };
 
             let mut sessions = sessions.lock().unwrap();
-            sessions.retain(|session| {
+            sessions.retain(|_session| {
                 if let Some(session_id) = session_ids.iter().find(|id| id.is_some()) {
                     *session_id.as_ref().unwrap() != msg_id
                 } else {
