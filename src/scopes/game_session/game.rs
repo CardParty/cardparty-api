@@ -100,7 +100,7 @@ async fn join_game(
         .session_manager
         .lock()
         .expect("failed to lock session manager");
-    let query = web::Query::<JoinSession>::from_query(req.query_string()).unwrap();
+    let query = web::Query::<JoinSession>::from_query(req.query_string())?;
     let session_id: SessionId = query.session_id;
     let user_id: UserId = query.user_id;
     let username: String = query.username.clone();

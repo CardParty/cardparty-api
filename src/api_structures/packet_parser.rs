@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    card_game::deck::Card,
     card_game::deck::Deck,
     managers::game_manager::{GameState, StateOption},
 };
@@ -27,7 +26,7 @@ pub struct State {
 #[serde(tag = "error")]
 pub enum PacketError {
     CipaChuj,
-    DziwkaToTrojmiasto,
+    GameManagerError,
     #[serde(skip)]
     MailboxError(MailboxError),
 }

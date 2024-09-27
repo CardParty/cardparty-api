@@ -2,7 +2,7 @@ use actix::{Addr, Message};
 use uuid::Uuid;
 
 use super::{
-    id::{self, SessionId, UserId},
+    id::{ SessionId, UserId},
     packet_parser::{Packet, PacketResponse},
     session::Session,
 };
@@ -47,7 +47,7 @@ pub struct BroadcastMessage(pub String);
 #[rtype(result = "()")]
 pub struct AddConnection(pub Addr<SessionConnection>);
 
-// session connection fucking yk TRRRTETRTRTRTRTRTRTRTRTRTRTRRTRTRTRTTR ( im losing my mind :) )
+
 
 #[derive(Message, Debug)]
 #[rtype(result = "()")]

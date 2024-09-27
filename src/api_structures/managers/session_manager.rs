@@ -1,10 +1,8 @@
 use crate::api_structures::id::*;
 use crate::api_structures::messages::{AddPlayer, CloseSession, GetHostId, GetSessionId};
-use crate::api_structures::session::{self, Session, SessionCode};
+use crate::api_structures::session::{Session, SessionCode};
 use crate::api_structures::session_connection::SessionConnection;
-use actix::{fut, spawn, Actor, Addr, Context, Handler};
-use actix_web::guard::Get;
-use futures::executor::block_on;
+use actix::{ spawn, Actor, Addr, Context, Handler};
 use futures::future::join_all;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -40,7 +38,7 @@ impl SessionManager {
         host_id: UserId,
         username: String,
     ) -> Result<(SessionId, SessionCode), SessionManagerError> {
-        let sessions = self.sessions.lock().expect("aaa");
+        let sessions = self.sessions.lock().expect("Failed to lock sessions");
         for session in sessions.iter() {
             let session_host_id = session
                 .send(GetHostId())
@@ -70,7 +68,7 @@ impl SessionManager {
 
         codes.insert(code.clone(), id);
 
-        self.sessions.lock().expect("sigma").push(addr.clone());
+        self.sessions.lock().expect("Failed to lock sessions").push(addr.clone());
         Ok((id, code.clone()))
     }
     pub fn unwrap_code(&self, code: SessionCode) -> Option<String> {
