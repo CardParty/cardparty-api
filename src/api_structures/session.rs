@@ -5,7 +5,6 @@ use super::messages::{
 };
 use super::packet_parser::{PacketError, PacketResponse};
 use super::session_connection::SessionConnection;
-use crate::api_structures::card_game::deck::DeckBundle;
 use crate::api_structures::id::*;
 use crate::api_structures::managers::game_manager::GameManager;
 use crate::api_structures::messages::BroadcastMessage;
@@ -116,24 +115,24 @@ impl Session {
 
         (addr, id)
     }
-    pub fn add_game_manager(&mut self, deck_bundle: DeckBundle) {
-        self.game_manager = Some(GameManager::init(deck_bundle));
-    }
-    pub fn get_game_manager(self) -> GameManager {
-        self.game_manager.unwrap()
-    }
-    pub fn advance_state(&mut self) {
-        match self.session_state {
-            SessionState::Lobby => self.session_state = SessionState::PreGame,
-            SessionState::PreGame => self.session_state = SessionState::Game,
-            SessionState::Game => self.session_state = SessionState::PostGame,
-            SessionState::PostGame => self.session_state = SessionState::Lobby,
-        }
-    }
+    // pub fn add_game_manager(&mut self, deck_bundle: DeckBundle) {
+    //     self.game_manager = Some(GameManager::init(deck_bundle));
+    // }
+    // pub fn get_game_manager(self) -> GameManager {
+    //     self.game_manager.unwrap()
+    // }
+    // pub fn advance_state(&mut self) {
+    //     match self.session_state {
+    //         SessionState::Lobby => self.session_state = SessionState::PreGame,
+    //         SessionState::PreGame => self.session_state = SessionState::Game,
+    //         SessionState::Game => self.session_state = SessionState::PostGame,
+    //         SessionState::PostGame => self.session_state = SessionState::Lobby,
+    //     }
+    // }
 
-    pub fn get_state(self) -> SessionState {
-        self.session_state
-    }
+    // pub fn get_state(self) -> SessionState {
+    //     self.session_state
+    // }
 }
 
 impl Handler<TestMessage> for Session {
