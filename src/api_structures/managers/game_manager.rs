@@ -38,12 +38,12 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(bundle: DeckBundle, cards: Vec<Card>) -> Self {
+    pub fn new(bundle: DeckBundle) -> Self {
         Self {
             players: Vec::new(),
             tables: bundle.tables,
             states: bundle.states,
-            cards,
+            cards: bundle.cards,
             card_count: 0,
             current: 0,
             score_state: bundle.score_state,
@@ -55,11 +55,11 @@ impl GameState {
         self.current = 0;
     }
 
-    pub fn change_deck(&mut self, bundle: DeckBundle, cards: Vec<Card>) {
+    pub fn change_deck(&mut self, bundle: DeckBundle) {
         self.tables = bundle.tables;
         self.states = bundle.states;
         self.score_state = bundle.score_state;
-        self.cards = cards;
+        self.cards = bundle.cards;
     }
 }
 
@@ -72,28 +72,9 @@ pub struct GameManager {
 
 impl GameManager {
     pub fn init(bundle: DeckBundle) -> Self {
-        let mut cards = Vec::new();
-        for card in bundle.cards.clone() {
-            let mut ops = Vec::new();
-            for seg in card {
-                match seg {
-                    ParserSegment::DynCode(raw) => ops.push(into_operation(raw)),
-                    ParserSegment::RawText(raw) => {
-                        ops.push(Operation::RawText(
-                            raw,
-                        ));
-                    }
-                };
-            }
-            cards.push(Card {
-                operations: ops,
-                id: Uuid::new_v4(),
-            });
-        }
-
         Self {
             rng: thread_rng(),
-            game_state: GameState::new(bundle.clone(), cards),
+            game_state: GameState::new(bundle.clone()),
             awaited_states: HashMap::new(),
         }
     }
@@ -302,9 +283,7 @@ impl GameManager {
                 match seg {
                     ParserSegment::DynCode(raw) => ops.push(into_operation(raw)),
                     ParserSegment::RawText(raw) => {
-                        ops.push(Operation::RawText(
-                            raw,
-                        ));
+                        ops.push(Operation::RawText(raw));
                     }
                 };
             }
