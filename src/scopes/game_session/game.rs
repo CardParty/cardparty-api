@@ -1,5 +1,6 @@
 use crate::api_structures::{
-    api_state::ApiState, id::*, messages::ConnectWithSession, session::SessionCode,
+    api_state::ApiState, card_game::deck::Deck, id::*, messages::ConnectWithSession,
+    session::SessionCode,
 };
 use actix_web::{
     get, post,
@@ -87,6 +88,13 @@ async fn unwrap_session_code(
     } else {
         HttpResponse::NoContent().finish()
     }
+}
+
+#[post("/deck")]
+async fn test_deck(context: web::Json<Deck>) -> impl Responder {
+    let deck = context.into_inner();
+    println!("Got Deck: {:?}", deck);
+    HttpResponse::Ok().json(deck)
 }
 
 async fn join_game(

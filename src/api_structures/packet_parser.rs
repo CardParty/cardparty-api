@@ -46,8 +46,8 @@ pub enum Packet {
     },
     PlayersUpdate {},
     CardResult {
-        state_options: Vec<StateOption>,
-        text: String,
+        state_options: Vec<Decision>,
+        display: String,
     },
     FinishGame {},
 
