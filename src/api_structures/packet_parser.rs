@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::{
     card_game::deck::Deck,
-    managers::game_manager::{GameState, StateOption},
+    managers::game_manager::{CardOption, GameState},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,7 +46,7 @@ pub enum Packet {
     },
     PlayersUpdate {},
     CardResult {
-        state_options: Vec<Decision>,
+        state_options: Vec<CardOption>,
         display: String,
     },
     FinishGame {},

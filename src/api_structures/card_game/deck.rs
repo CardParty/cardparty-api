@@ -314,7 +314,9 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug)]
+use crate::api_structures::session::Player;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum Data {
     String { string: String },
@@ -325,65 +327,109 @@ pub enum Data {
     Combinator { buff: Vec<Data> },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+impl Data {
+    pub fn get_ident(&self) -> Option<String> {
+        match self {
+            Data::String { string } => Some(string.clone()),
+            Data::StateRefrence { ident } => Some(ident.clone()),
+            Data::TableRefrence { ident } => Some(ident.clone()),
+            Data::ActionRefrence { ident } => Some(ident.clone()),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "segment")]
 pub enum Segment {
     Raw { string: String },
     Action { ident: String },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "selector")]
 pub enum Selector {
     Current,
     Previous,
     Next,
     Random,
+    None,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum Action {
     UpdateState {
-        state: Data,
+        ident: String,
+        state: String,
+        value: Data,
         add: bool,
+        selector: Selector,
+    },
+    Option {
+        ident: String,
+        display: String,
+        actions: Vec<String>,
+    },
+    GetFromTable {
+        ident: String,
+        table: String,
+        tags: Vec<String>,
+    },
+    GetFromState {
+        ident: String,
+        state: String,
         selector: Selector,
     },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Value {
-    value: String,
-    tags: Vec<String>,
+impl Action {
+    pub fn get_ident(&self) -> String {
+        match self {
+            Action::UpdateState { ident, .. } => ident.clone(),
+            Action::Option { ident, .. } => ident.clone(),
+            Action::GetFromTable { ident, .. } => ident.clone(),
+            Action::GetFromState { ident, .. } => ident.clone(),
+        }
+    }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Value {
+    pub value: String,
+    pub tags: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Table {
-    pub name: String,
+    pub ident: String,
     pub values: Vec<Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Card {
-    segments: Vec<Segment>,
-    actions: Vec<Action>,
+    pub segments: Vec<Segment>,
+    pub actions: Vec<Action>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct State {
     pub ident: String,
     pub value: Data,
     pub individual: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Meta {
     pub deck_name: String,
     pub id: Uuid,
-    pub score_board: ScoreBoard,
+    pub scoreboard: ScoreBoard,
+    max_cards: i32,
+    max_players: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type")]
 pub enum ScoreBoardCondition {
     Biggest,
     Lowest,
@@ -392,13 +438,76 @@ pub enum ScoreBoardCondition {
     FirstToReach,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ScoreElement {
+    username: String,
+    value: i32,
+    position: i32,
+    #[serde(skip)]
+    // score is used for sorting, it will find the max, and the min then bound the rest of the values in a interepolated value between 0.00 and 1.00
+    score: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RenderedScoreBoard {
+    ident: String,
+    data: Vec<ScoreElement>,
+}
+impl PartialEq for ScoreElement {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for ScoreElement {}
+
+impl PartialOrd for ScoreElement {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.value.cmp(&other.value))
+    }
+}
+
+impl Ord for ScoreElement {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ScoreBoard {
     state: Data,
-    value: Data,
+    value: Data, // this is the value that will be used for the condition, like ClosestTo will use this value to compare. In conditions like FirstToReach this value will be the target value, in conditions like Biggest this will be ignored as it will just find the biggest value
     cond: ScoreBoardCondition,
 }
 
+impl ScoreBoard {
+    pub fn generate_scoreboard(
+        &self,
+        states: HashMap<String, StateModule>,
+        players: Vec<Player>,
+    ) -> RenderedScoreBoard {
+        let score_state = states.get(&self.state.get_ident().unwrap()).unwrap();
+
+        match score_state {
+            StateModule::IndividualState {
+                constructor_value,
+                map,
+            } => {
+                let mut score_elements = Vec::new();
+                let mut buffer: Vec<(Uuid, i32)> = Vec::new();
+                for player in players {
+                    let value = map.get(&player.id).unwrap_or(constructor_value);
+                    buffer.push((player.id, *value));
+                    buffer.sort_by(|a, b| a.1.cmp(&b.1));
+                }
+                buffer.
+            }
+            _ => {}
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StateModule {
     SharedState {
         ident: String,
@@ -409,13 +518,15 @@ pub enum StateModule {
         map: HashMap<Uuid, i32>,
     },
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeckBundle {
     pub score_state: ScoreBoard,
     pub tables: HashMap<String, Vec<Value>>,
     pub states: HashMap<String, StateModule>,
     pub cards: Vec<Card>,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Deck {
     meta: Meta,
     tables: Vec<Table>,
@@ -427,7 +538,7 @@ impl Deck {
     pub fn into_bundle(self) -> DeckBundle {
         let mut table_hash = HashMap::new();
         for table in self.tables {
-            table_hash.insert(table.name, table.values);
+            table_hash.insert(table.ident, table.values);
         }
         let mut state_hash = HashMap::new();
         for state in self.states {
@@ -457,7 +568,7 @@ impl Deck {
         }
 
         DeckBundle {
-            score_state: self.meta.score_board,
+            score_state: self.meta.scoreboard,
             tables: table_hash,
             states: state_hash,
             cards: self.cards,

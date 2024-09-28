@@ -1,9 +1,8 @@
-use crate::api_structures::card_game::deck::MathOperation;
-use crate::api_structures::card_game::deck::Operation;
-use crate::api_structures::card_game::deck::Selector;
 use crate::api_structures::card_game::deck::{
-    into_operation, Card, DeckBundle, ParserSegment, StateModule, Value,
+    Action, Card, Data, DeckBundle, Segment, StateModule, Value,
 };
+use crate::api_structures::card_game::deck::{ScoreBoard, Selector};
+use crate::api_structures::id;
 use crate::api_structures::session::Player;
 use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
@@ -11,19 +10,42 @@ use rand::thread_rng;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StateOption {
-    pub id: Uuid,
-    pub state: String,
-    pub math_operation: MathOperation,
-    pub value: i32,
+pub enum Intermediate {
+    Value(String),
+    Action(Action),
 }
 
+impl Intermediate {
+    pub fn to_string(&self) -> Option<String> {
+        match self {
+            Intermediate::Value(value) => Some(value.clone()),
+            Intermediate::Action(_) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StateUpdate {
+    pub ident: String,
+    pub modifier: i32,
+    pub selector: Selector,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardOption {
+    pub id: Uuid,
+    pub display: String,
+    #[serde(skip)]
+    pub updates: Vec<StateUpdate>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CardResult {
-    pub state_options: Vec<StateOption>,
+    pub state_options: Vec<CardOption>,
     pub text: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -34,7 +56,7 @@ pub struct GameState {
     cards: Vec<Card>,
     card_count: usize,
     current: usize,
-    score_state: String,
+    score_state: ScoreBoard,
 }
 
 impl GameState {
@@ -67,7 +89,7 @@ impl GameState {
 pub struct GameManager {
     rng: ThreadRng,
     game_state: GameState,
-    awaited_states: HashMap<Uuid, StateOption>,
+    awaited_states: HashMap<Uuid, CardOption>,
 }
 
 impl GameManager {
@@ -78,38 +100,6 @@ impl GameManager {
             awaited_states: HashMap::new(),
         }
     }
-    // pub fn generate_position_state(&self) -> HashMap<Uuid, i32> {
-    //     let player_id = self.match_player(Selector::Current).id;
-    //     if let Some(state) = self.awaited_states.get(&player_id) {
-    //         let new_value = state.value as i64;
-    //         if let Some(state_module) = self.game_state.states.get_mut(&state.state) {
-    //             match state_module {
-    //                 StateModule::LocalState {
-    //                     value,
-    //                     min: _,
-    //                     max: _,
-    //                 } => {
-    //                     *value = match state.get() {
-    //                         MathOperation::Add => *value + new_value,
-    //                         MathOperation::Sub => *value - new_value,
-    //                         MathOperation::Div => *value / new_value,
-    //                         MathOperation::Mul => *value * new_value,
-    //                     };
-    //                 }
-    //                 StateModule::GlobalState { template: _, map } => {
-    //                     let (value, min, max) = map.get_mut(&player_id).unwrap();
-    //                     *value = match state.math_operation {
-    //                         MathOperation::Add => *value + new_value,
-    //                         MathOperation::Sub => *value - new_value,
-    //                         MathOperation::Div => *value / new_value,
-    //                         MathOperation::Mul => *value * new_value,
-    //                     };
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     self.awaited_states.clear();
-    // }
     pub fn next_player(&mut self) {
         self.game_state.current += 1;
         if self.game_state.current >= self.game_state.players.len() {
@@ -118,36 +108,36 @@ impl GameManager {
     }
 
     pub fn resolve_state(&mut self, id: Uuid) {
-        let player_id = self.match_player(Selector::Current).id;
-        if let Some(state) = self.awaited_states.get(&id) {
-            let new_value = state.value as i64;
-            if let Some(state_module) = self.game_state.states.get_mut(&state.state) {
-                match state_module {
-                    StateModule::LocalState {
-                        value,
-                        min: _,
-                        max: _,
-                    } => {
-                        *value = match state.math_operation {
-                            MathOperation::Add => *value + new_value,
-                            MathOperation::Sub => *value - new_value,
-                            MathOperation::Div => *value / new_value,
-                            MathOperation::Mul => *value * new_value,
-                        };
+        if let Some(option) = self.awaited_states.remove(&id) {
+            for update in option.updates {
+                match update.selector {
+                    Selector::None => {
+                        let state = self.game_state.states.get_mut(&update.ident).unwrap();
+                        match state {
+                            StateModule::SharedState { value, ident } => {
+                                *value += update.modifier;
+                            }
+                            _ => {}
+                        }
                     }
-                    StateModule::GlobalState { template: _, map } => {
-                        let (value, _min, _max) = map.get_mut(&player_id).unwrap();
-                        *value = match state.math_operation {
-                            MathOperation::Add => *value + new_value,
-                            MathOperation::Sub => *value - new_value,
-                            MathOperation::Div => *value / new_value,
-                            MathOperation::Mul => *value * new_value,
-                        };
+                    _ => {
+                        let player = self.match_player(update.selector);
+                        let state = self.game_state.states.get_mut(&update.ident).unwrap();
+                        match state {
+                            StateModule::IndividualState {
+                                constructor_value,
+                                map,
+                            } => {
+                                if let Some(value) = map.get_mut(&player.id) {
+                                    *value += update.modifier;
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
             }
         }
-        self.awaited_states.clear();
     }
 
     pub fn start_game(&mut self) {
@@ -161,8 +151,14 @@ impl GameManager {
             .push(Player::new(id, username, is_host));
 
         for (_, v) in self.game_state.states.iter_mut() {
-            if let StateModule::GlobalState { template, map } = v {
-                map.insert(id, template.clone());
+            match v {
+                StateModule::IndividualState {
+                    constructor_value,
+                    map,
+                } => {
+                    map.insert(id, constructor_value.clone());
+                }
+                _ => {}
             }
         }
     }
@@ -170,8 +166,14 @@ impl GameManager {
     pub fn remove_player(&mut self, id: Uuid) {
         self.game_state.players.retain(|p| p.id != id);
         for (_, v) in self.game_state.states.iter_mut() {
-            if let StateModule::GlobalState { template: _, map } = v {
-                map.retain(|k, _| *k != id);
+            match v {
+                StateModule::IndividualState {
+                    constructor_value: _,
+                    map,
+                } => {
+                    map.retain(|k, _| *k != id);
+                }
+                _ => {}
             }
         }
     }
@@ -195,105 +197,177 @@ impl GameManager {
                 let mut rng = thread_rng();
                 self.game_state.players.choose(&mut rng).unwrap().clone()
             }
+            Selector::None => self.game_state.players[self.game_state.current].clone(),
         }
     }
 
-    pub fn get_next_card(&mut self) -> CardResult {
-        let card =
-            self.game_state.cards[self.game_state.card_count % self.game_state.cards.len()].clone();
-        self.game_state.card_count += 1;
-
+    pub fn get_next_card(&mut self) -> Option<CardResult> {
         let mut buffer: Vec<String> = Vec::new();
-        let state_options: Vec<StateOption> = Vec::new();
+        let mut decisions: Vec<CardOption> = Vec::new();
 
-        for op in card.operations {
-            match op {
-                Operation::GetFromTable {
-                    table,
-                    filter,
-                    amount,
-                } => {
-                    let selection: usize = if amount == 0 { 1 } else { amount as usize };
-                    let table = self.game_state.tables.get(&table).unwrap();
-                    let values: Vec<String> = table
-                        .iter()
-                        .filter(move |val| filter.is_empty() || val.has_tag(&filter))
-                        .collect::<Vec<&Value>>()
-                        .choose_multiple(&mut self.rng, selection)
-                        .cloned()
-                        .map(|value| value.value.clone())
-                        .collect();
+        let mut actions_cache: HashMap<String, Intermediate> = HashMap::new();
+        let mut state_updates: HashMap<String, StateUpdate> = HashMap::new();
 
-                    buffer.push(values.join(", "));
-                }
-                Operation::GetFromPlayers { selector } => {
-                    buffer.push(self.match_player(selector).username);
-                }
-                Operation::GetStateFromPlayer { selector, state } => {
-                    let player = self.match_player(selector);
-                    match self.game_state.states.get(&state).expect("State not found") {
-                        StateModule::LocalState {
-                            value,
-                            min: _,
-                            max: _,
-                        } => {
-                            buffer.push(format!("{}: {}", state, value));
+        if let Some(card) = self.game_state.cards.choose(&mut self.rng) {
+            for action in card.actions.clone() {
+                if let Some((inter, ident)) = match action {
+                    Action::GetFromTable { ident, table, tags } => {
+                        let filtered_table = self.game_state.tables.get(&table).map(|v| {
+                            if tags.is_empty() {
+                                v.clone()
+                            } else {
+                                v.iter()
+                                    .filter(|item| tags.iter().all(|tag| item.tags.contains(tag)))
+                                    .cloned()
+                                    .collect()
+                            }
+                        });
+
+                        if let Some(table) = filtered_table {
+                            let value = table.choose(&mut self.rng).unwrap().value.clone();
+                            Some((Intermediate::Value(value), ident))
+                        } else {
+                            Some((
+                                Intermediate::Value("WYWYWYWYWYYW WYJEBAŁO SIE".to_string()),
+                                ident,
+                            ))
                         }
-                        StateModule::GlobalState { template: _, map } => {
-                            if let Some(value) = map.get(&player.id) {
-                                buffer.push(format!("{}: {} {}", player.username, value.0, state));
+                    }
+                    Action::GetFromState {
+                        ident,
+                        state,
+                        selector,
+                    } => match selector {
+                        Selector::None => {
+                            let state = self.game_state.states.get(&state).unwrap();
+                            match state {
+                                StateModule::SharedState {
+                                    value,
+                                    ident: state_ident,
+                                } => Some((
+                                    Intermediate::Value(value.clone().to_string()),
+                                    state_ident.clone(),
+                                )),
+                                _ => Some((
+                                    Intermediate::Value("WYWYWYWYWYYW WYJEBAŁO SIE v3".to_string()),
+                                    ident,
+                                )),
+                            }
+                        }
+                        _ => {
+                            let player = self.match_player(selector);
+                            let state = self.game_state.states.get(&state).unwrap();
+                            match state {
+                                StateModule::IndividualState {
+                                    constructor_value,
+                                    map,
+                                } => {
+                                    if let Some(value) = map.get(&player.id) {
+                                        Some((
+                                            Intermediate::Value(value.clone().to_string()),
+                                            ident,
+                                        ))
+                                    } else {
+                                        Some((
+                                            Intermediate::Value(
+                                                "WYWYWYWYWYYW WYJEBAŁO SIE V2".to_string(),
+                                            ),
+                                            ident,
+                                        ))
+                                    }
+                                }
+                                StateModule::SharedState {
+                                    value,
+                                    ident: state_ident,
+                                } => Some((
+                                    Intermediate::Value(value.clone().to_string()),
+                                    state_ident.clone(),
+                                )),
+                            }
+                        }
+                    },
+                    _ => None,
+                } {
+                    actions_cache.insert(ident.clone(), inter);
+                }
+            }
+
+            for segment in card.segments.clone() {
+                match segment {
+                    Segment::Raw { string } => {
+                        buffer.push(string.clone());
+                    }
+                    Segment::Action { ident } => {
+                        if let Some(inter) = actions_cache.get(&ident) {
+                            if let Some(value) = inter.to_string() {
+                                buffer.push(value);
                             }
                         }
                     }
                 }
-                Operation::UpdateState {
-                    id,
-                    state,
-                    math_operation,
-                    value,
-                } => {
-                    self.awaited_states.insert(
-                        id,
-                        StateOption {
-                            id,
+            }
+
+            for action in card.actions.clone() {
+                if (actions_cache.contains_key(&action.get_ident())) {
+                    continue;
+                } else {
+                    match action {
+                        Action::UpdateState {
+                            ident,
                             state,
-                            math_operation,
                             value,
-                        },
-                    );
-                }
-                Operation::Error(err) => {
-                    buffer.clear();
-                    buffer.push(err);
-                }
-                Operation::RawText(raw) => buffer.push(raw),
-            }
-        }
-        CardResult {
-            state_options,
-            text: buffer.join(""),
-        }
-    }
-
-    pub fn change_deck(&mut self, bundle: DeckBundle) {
-        let mut cards = Vec::new();
-        for card in bundle.cards.clone() {
-            let mut ops = Vec::new();
-            for seg in card {
-                match seg {
-                    ParserSegment::DynCode(raw) => ops.push(into_operation(raw)),
-                    ParserSegment::RawText(raw) => {
-                        ops.push(Operation::RawText(raw));
+                            add,
+                            selector,
+                        } => {
+                            state_updates.insert(
+                                ident.clone(),
+                                StateUpdate {
+                                    ident: ident.clone(),
+                                    modifier: match value {
+                                        Data::Integer { integer } => {
+                                            if !add {
+                                                integer * -1
+                                            } else {
+                                                integer
+                                            }
+                                        }
+                                        _ => 0,
+                                    },
+                                    selector,
+                                },
+                            );
+                        }
+                        Action::Option {
+                            ident,
+                            display,
+                            actions,
+                        } => {
+                            let mut updates = Vec::new();
+                            for action_ident in actions {
+                                if let Some(state_update) = state_updates.clone().get(&action_ident)
+                                {
+                                    updates.push(state_update.clone());
+                                }
+                            }
+                            decisions.push(CardOption {
+                                id: Uuid::new_v4(),
+                                display,
+                                updates,
+                            });
+                        }
+                        _ => {}
                     }
-                };
+                }
             }
-            cards.push(Card {
-                operations: ops,
-                id: Uuid::new_v4(),
-            });
         }
 
-        self.game_state.change_deck(bundle, cards);
+        Some(CardResult {
+            state_options: decisions,
+            text: buffer.join(" "),
+        })
+    }
+    pub fn change_deck(&mut self, bundle: DeckBundle) {
+        self.game_state.change_deck(bundle);
     }
 
     pub fn reset_game_state(&mut self) {

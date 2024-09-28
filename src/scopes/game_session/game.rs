@@ -1,5 +1,9 @@
 use crate::api_structures::{
-    api_state::ApiState, card_game::deck::Deck, id::*, messages::ConnectWithSession,
+    api_state::ApiState,
+    card_game::deck::Deck,
+    id::*,
+    managers::game_manager::{GameManager, GameState},
+    messages::ConnectWithSession,
     session::SessionCode,
 };
 use actix_web::{
@@ -93,8 +97,24 @@ async fn unwrap_session_code(
 #[post("/deck")]
 async fn test_deck(context: web::Json<Deck>) -> impl Responder {
     let deck = context.into_inner();
-    println!("Got Deck: {:?}", deck);
+    println!("Got Deck: {:#?}", &deck);
     HttpResponse::Ok().json(deck)
+}
+
+#[post("/render_cards")]
+async fn render_cards(context: web::Json<Deck>) -> impl Responder {
+    let deck = context.into_inner();
+    println!("Got Deck: {:#?}", &deck);
+    let mut manager = GameManager::init(deck.into_bundle());
+    let mut results = Vec::new();
+    for _ in 0..10 {
+        if let Some(result) = manager.get_next_card() {
+            results.push(result);
+        } else {
+            break;
+        }
+    }
+    HttpResponse::Ok().json(results)
 }
 
 async fn join_game(
@@ -134,4 +154,6 @@ pub fn game_scope() -> Scope {
         .route("/join", web::get().to(join_game))
         .service(unwrap_session_code)
         .service(get_games)
+        .service(test_deck)
+        .service(render_cards)
 }
