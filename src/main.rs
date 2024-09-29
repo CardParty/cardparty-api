@@ -25,7 +25,7 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     let api_state = Arc::new(Mutex::new(ApiState::new()));
 
-    env_logger::init_from_env(Env::default().default_filter_or("default"));
+    env_logger::init_from_env(Env::default().default_filter_or("debug"));
 
     HttpServer::new(move || {
         App::new()

@@ -3,7 +3,7 @@ use super::messages::{
     AddConnection, AddPlayer, CloseSession, CloseSessionConnection, GetHostId, GetSessionId,
     PlayerUpdate, SendPacket, SendToClient, VerifyExistence,
 };
-use super::packet_parser::{PacketError, PacketResponse};
+use super::packet_parser::{Packet, PacketError, PacketResponse};
 use super::session_connection::SessionConnection;
 use crate::api_structures::id::*;
 use crate::api_structures::managers::game_manager::GameManager;
@@ -157,6 +157,7 @@ impl Handler<GetHostId> for Session {
 impl Handler<AddPlayer> for Session {
     type Result = Result<SessionConnection, SessionError>;
     fn handle(&mut self, msg: AddPlayer, _ctx: &mut Self::Context) -> Self::Result {
+        log::info!("Adding player: {:#?} to session: {:#?}", msg, self.id);
         self.players
             .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
         if self.players.len() == 1 {
@@ -167,7 +168,12 @@ impl Handler<AddPlayer> for Session {
                 .map(|x| x.username.clone())
                 .collect::<Vec<String>>();
             for conn in self.connections.clone() {
-                conn.do_send(PlayerUpdate(players.clone()));
+
+                if let Some(game_manager) = self.game_manager.as_ref() {
+                    conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
+                } else {
+                    panic!("Game Manager not initialized");
+                }
             }
             Ok(conn)
         } else {
@@ -178,7 +184,11 @@ impl Handler<AddPlayer> for Session {
                 .map(|x| x.username.clone())
                 .collect::<Vec<String>>();
             for conn in self.connections.clone() {
-                conn.do_send(PlayerUpdate(players.clone()));
+                if let Some(game_manager) = self.game_manager.as_ref() {
+                    conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
+                } else {
+                    panic!("Game Manager not initialized");
+                }
             }
             Ok(conn)
         }
@@ -205,6 +215,7 @@ impl Handler<AddConnection> for Session {
     type Result = ();
 
     fn handle(&mut self, msg: AddConnection, _ctx: &mut Self::Context) -> Self::Result {
+        log::info!("Adding connection: {:#?}", msg.0);
         self.connections.push(msg.0);
     }
 }
@@ -214,87 +225,70 @@ impl Handler<SendPacket> for Session {
 
     fn handle(&mut self, msg: SendPacket, _ctx: &mut Self::Context) -> Self::Result {
         match msg.0 {
-            super::packet_parser::Packet::UpdateState { new_state: _new_state } => {
-                // ignore
-                todo!()
+            Packet::TestError {  } => {
+                Err(PacketError::CipaChuj)
             }
-            super::packet_parser::Packet::FinishGame {} => {
-                // so reset the whole session to a lobby state,
-                // aka set state to Lobby, Remove all game_state stuff ect.
-
-                self.session_state = SessionState::Lobby;
+            Packet::TestPacketWithString { string } => {
+                Ok(PacketResponse::TestPacketWithStringOk { string })
+            }
+            Packet::SetDeck { deck } => {
+                log::info!("Setting deck: {:#?}", deck);
                 if let Some(game_manager) = self.game_manager.as_mut() {
-                    game_manager.reset_game_state();
-                    Ok(PacketResponse::FinishGameOk)
-                } else {
-                    Err(PacketError::GameManagerError)
-                }
-            }
-            super::packet_parser::Packet::SetDeck { deck } => {
+                game_manager.change_deck(deck.into_bundle());
+                Ok(PacketResponse::SetDeckOk { bundle: game_manager.bundle_state() })
+            } else {
+                self.game_manager = Some(GameManager::init(deck.into_bundle()));
+                    Ok(PacketResponse::SetDeckOk { bundle: self.game_manager.clone().unwrap().bundle_state() })
+            } }
+            Packet::PlayerLeft { id } => {
                 if let Some(game_manager) = self.game_manager.as_mut() {
-                    game_manager.change_deck(deck.into_bundle());
-                    Ok(PacketResponse::SetDeckOk)
-                } else {
-                    Err(PacketError::GameManagerError)
-                }
-                //ignore: Nie ma metody do dodania decku
-            }
-            super::packet_parser::Packet::PlayerLeft { id } => {
-                // use the remove_player methods on tgame_state, remove player from players in session,
-                // close the websocket ect.
-                // also choose a random player  as host idc which one lol.
-                // If no players remain close session.
-                if let Some(_game_manager) = self.game_manager.as_mut() {
-                    self.game_manager.as_mut().unwrap().remove_player(id);
-                    self.players.retain(|x| x.id != id);
-                    if self.players.len() == 0 {
-                        self.session_state = SessionState::Lobby;
+                game_manager.remove_player(id);
+                self.players.retain(|x| x.id != id);
+                if self.players.len() == 0 {
+                    self.session_state = SessionState::Lobby;
 
-                        for conn in &self.connections {
-                            conn.do_send(CloseSessionConnection);
-                        }
-                        self.manager_addr.do_send(CloseSession(self.id.clone()));
-                        Ok(PacketResponse::CloseSessionOk)
-                    } else {
-                        self.host_id = self.players[0].id;
-                        Ok(PacketResponse::PlayerLeftOk)
+                    for conn in &self.connections {
+                        conn.do_send(CloseSessionConnection);
                     }
+                    self.manager_addr.do_send(CloseSession(self.id.clone()));
+                    Ok(PacketResponse::CloseSessionOk)
+                } else {
+                    self.host_id = self.players[0].id;
+                    Ok(PacketResponse::PlayerLeftOk { bundle: game_manager.bundle_state() } )
+                }
+            } else {
+                Err(PacketError::GameManagerError)
+            }}
+            Packet::PlayerDoneChoise { chosen } => {
+                log::info!("Player done choise: {:#?}", chosen);
+                if let Some(game_manager) = self.game_manager.as_mut() {
+                    game_manager.resolve_state(chosen);
+
+                Ok(PacketResponse::CardResultOk { card: game_manager.get_next_card().unwrap(), bundle: game_manager.bundle_state() })
                 } else {
                     Err(PacketError::GameManagerError)
                 }
             }
-            super::packet_parser::Packet::PlayerDoneChoise { chosen } => {
-                // use resolve_state method to resolve the state
-                self.game_manager.as_mut().unwrap().resolve_state(chosen);
-                Ok(PacketResponse::PlayerDoneChoiseOk)
+            Packet::PlayerDone { .. } => {
+                log::info!("Player done");
+                if let Some(game_manager) = self.game_manager.as_mut() {
+                    Ok(PacketResponse::CardResultOk { card: game_manager.get_next_card().unwrap(), bundle: game_manager.bundle_state() })
+                } else {
+                    Err(PacketError::GameManagerError)
+                }
             }
-            super::packet_parser::Packet::PlayerDone {} => {
-                // go to next player and render new card
-                self.game_manager.as_mut().unwrap().next_player();
-                Ok(PacketResponse::PlayerDoneOk)
-            }
-            super::packet_parser::Packet::CloseSession {} => {
-                // Close all websocket connections
-                // Use session manager to close this session.
+            Packet::CloseSession { .. } => {
+                log::info!("Closing session: {:#?}", self.id);
                 for conn in self.connections.clone() {
                     conn.do_send(CloseSessionConnection);
                 }
                 self.manager_addr.do_send(CloseSession(self.id.clone()));
                 Ok(PacketResponse::CloseSessionOk)
             }
-            super::packet_parser::Packet::TestError {} => Err(PacketError::CipaChuj),
-            super::packet_parser::Packet::TestPacketWithString { string } => {
-                Ok(PacketResponse::TestPacketWithStringOk { string })
+
+            _ => {
+                Err(PacketError::CipaChuj)
             }
-            super::packet_parser::Packet::GetPlayers {} => {
-                let players = self
-                    .players
-                    .iter()
-                    .map(|x| x.username.clone())
-                    .collect::<Vec<String>>();
-                Ok(PacketResponse::GetPlayersOk { players })
-            }
-            _ => Err(PacketError::CipaChuj),
         }
     }
 }

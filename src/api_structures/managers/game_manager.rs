@@ -1,6 +1,4 @@
-use crate::api_structures::card_game::deck::{
-    Action, Card, Data, DeckBundle, Segment, StateModule, Value,
-};
+use crate::api_structures::card_game::deck::{Action, Card, Data, DeckBundle, RenderedScoreBoard, Segment, StateModule, Value};
 use crate::api_structures::card_game::deck::{ScoreBoard, Selector};
 use crate::api_structures::id;
 use crate::api_structures::session::Player;
@@ -13,6 +11,22 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameBundle {
+    score_board: RenderedScoreBoard,
+    current_idx: usize,
+    states: Vec<StateModule> }
+
+impl Default for GameBundle {
+    fn default() -> Self {
+        Self {
+            score_board: RenderedScoreBoard::default(),
+            current_idx: 0,
+            states: Vec::new(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Intermediate {
@@ -48,6 +62,7 @@ pub struct CardResult {
     pub state_options: Vec<CardOption>,
     pub text: String,
 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GameState {
     players: Vec<Player>,
@@ -83,6 +98,24 @@ impl GameState {
         self.score_state = bundle.score_state;
         self.cards = bundle.cards;
     }
+
+    pub fn bundle_state(&self) -> GameBundle {
+
+        if let Ok(score_board) = self.score_state.generate_scoreboard(self.states.clone(), self.players.clone()) {
+            GameBundle {
+                score_board,
+                current_idx: self.current,
+                states: self.states.clone().into_values().filter_map(|v| match v {
+                    StateModule::SharedState { .. } => Some(v),
+                    _ => None,
+                }).collect()
+            }
+        } else {
+            panic!("Failed to generate scoreboard")
+        }
+    }
+
+
 }
 
 #[derive(Clone)]
@@ -101,6 +134,7 @@ impl GameManager {
         }
     }
     pub fn next_player(&mut self) {
+        log::info!("Next player {:#?}", self.game_state.current + 1);
         self.game_state.current += 1;
         if self.game_state.current >= self.game_state.players.len() {
             self.game_state.current = 0;
@@ -108,6 +142,7 @@ impl GameManager {
     }
 
     pub fn resolve_state(&mut self, id: Uuid) {
+        log::info!("Resolving state {:#?}", id);
         if let Some(option) = self.awaited_states.remove(&id) {
             for update in option.updates {
                 match update.selector {
@@ -146,6 +181,7 @@ impl GameManager {
     }
 
     pub fn add_player(&mut self, id: Uuid, username: String, is_host: bool) {
+        log::info!("Adding player {:#?}", username);
         self.game_state
             .players
             .push(Player::new(id, username, is_host));
@@ -164,6 +200,7 @@ impl GameManager {
     }
 
     pub fn remove_player(&mut self, id: Uuid) {
+        log::info!("Removing player {:#?}", id);
         self.game_state.players.retain(|p| p.id != id);
         for (_, v) in self.game_state.states.iter_mut() {
             match v {
@@ -202,6 +239,7 @@ impl GameManager {
     }
 
     pub fn get_next_card(&mut self) -> Option<CardResult> {
+        log::info!("Getting next card");
         let mut buffer: Vec<String> = Vec::new();
         let mut decisions: Vec<CardOption> = Vec::new();
 
@@ -361,16 +399,26 @@ impl GameManager {
             }
         }
 
+        self.next_player();
+        log::info!("Returning card text: {:#?}", buffer.join(" "));
+        log::info!("Returning card decisions: {:#?}", decisions);
         Some(CardResult {
             state_options: decisions,
             text: buffer.join(" "),
         })
     }
     pub fn change_deck(&mut self, bundle: DeckBundle) {
+        log::info!("Changing deck: {:#?}", bundle);
         self.game_state.change_deck(bundle);
     }
 
     pub fn reset_game_state(&mut self) {
+        log::info!("Resetting game state {:#?}", self.game_state);
         self.game_state.reset();
+    }
+
+    pub fn bundle_state(&self) -> GameBundle {
+        log::info!("Bundling state {:#?}", self.game_state.bundle_state());
+        self.game_state.bundle_state()
     }
 }
