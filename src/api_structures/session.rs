@@ -231,15 +231,15 @@ impl Handler<SendPacket> for Session {
             Packet::TestPacketWithString { string } => {
                 Ok(PacketResponse::TestPacketWithStringOk { string })
             }
-            Packet::SetDeck { deck } => {
-                log::info!("Setting deck: {:#?}", deck);
-                if let Some(game_manager) = self.game_manager.as_mut() {
-                game_manager.change_deck(deck.into_bundle());
-                Ok(PacketResponse::SetDeckOk { bundle: game_manager.bundle_state() })
-            } else {
-                self.game_manager = Some(GameManager::init(deck.into_bundle()));
-                    Ok(PacketResponse::SetDeckOk { bundle: self.game_manager.clone().unwrap().bundle_state() })
-            } }
+                Packet::SetDeck { deck } => {
+                    log::info!("Setting deck: {:#?}", deck);
+                    if let Some(game_manager) = self.game_manager.as_mut() {
+                    game_manager.change_deck(deck.into_bundle());
+                    Ok(PacketResponse::SetDeckOk { bundle: game_manager.bundle_state() })
+                } else {
+                    self.game_manager = Some(GameManager::init(deck.into_bundle()));
+                        Ok(PacketResponse::SetDeckOk { bundle: self.game_manager.clone().unwrap().bundle_state() })
+                } }
             Packet::PlayerLeft { id } => {
                 if let Some(game_manager) = self.game_manager.as_mut() {
                 game_manager.remove_player(id);
