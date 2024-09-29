@@ -81,6 +81,7 @@ pub struct Session {
     pub connections: Vec<Addr<SessionConnection>>,
     pub host_id: Uuid,
     pub players: Vec<Player>,
+    pub uncommited_players: Vec<Player>,
     pub admin_token: Uuid,
     pub game_manager: Option<GameManager>,
     pub session_state: SessionState,
@@ -105,6 +106,7 @@ impl Session {
             host_id,
             connections: Vec::new(),
             players: Vec::new(),
+            uncommited_players: Vec::new(),
             admin_token: Uuid::new_v4(),
             game_manager: None,
             session_state: SessionState::Lobby,
@@ -168,12 +170,25 @@ impl Handler<AddPlayer> for Session {
                 .map(|x| x.username.clone())
                 .collect::<Vec<String>>();
             for conn in self.connections.clone() {
+                if let Some(game_manager) = self.game_manager.as_mut() {
+                    if self.uncommited_players.is_empty() {
+                        log::info!("Sending player update emptry ucp");
+                        conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
+                    } else {
+                        for player in self.uncommited_players.drain(..) {
+                            log::info!("adding from ucp");
+                            conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
+                            game_manager.add_player(player.id, player.username.clone(), player.is_host);
+                        }
+                    }
 
-                if let Some(game_manager) = self.game_manager.as_ref() {
-                    conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
                 } else {
-                    panic!("Game Manager not initialized");
+                    self.uncommited_players
+                      .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
                 }
+
+                log::info!("Uncommited Pl : {:#?}", self.uncommited_players);
+                log::info!("Players: {:#?}", self.players);
             }
             Ok(conn)
         } else {
@@ -184,11 +199,25 @@ impl Handler<AddPlayer> for Session {
                 .map(|x| x.username.clone())
                 .collect::<Vec<String>>();
             for conn in self.connections.clone() {
-                if let Some(game_manager) = self.game_manager.as_ref() {
-                    conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
+                if let Some(game_manager) = self.game_manager.as_mut() {
+                    if self.uncommited_players.is_empty() {
+                        log::info!("Sending player update emptry ucp");
+                        conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
+                    } else {
+                        for player in self.uncommited_players.drain(..) {
+                            log::info!("adding from ucp");
+                            conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
+                            game_manager.add_player(player.id, player.username.clone(), player.is_host);
+                        }
+                    }
+
                 } else {
-                    panic!("Game Manager not initialized");
+                    self.uncommited_players
+                      .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
                 }
+
+                log::info!("Uncommited Pl : {:#?}", self.uncommited_players);
+                log::info!("Players: {:#?}", self.players);
             }
             Ok(conn)
         }
@@ -263,8 +292,14 @@ impl Handler<SendPacket> for Session {
                 log::info!("Player done choise: {:#?}", chosen);
                 if let Some(game_manager) = self.game_manager.as_mut() {
                     game_manager.resolve_state(chosen);
+                    let card = game_manager.get_next_card().unwrap();
+                    let bundle = game_manager.bundle_state();
 
-                Ok(PacketResponse::CardResultOk { card: game_manager.get_next_card().unwrap(), bundle: game_manager.bundle_state() })
+                    for conn in self.connections.clone() {
+                        conn.do_send(SendPacket(Packet::CardResult { card: card.clone(), bundle: bundle.clone() }));
+                    }
+
+                Ok(PacketResponse::CardResultOk { card: card.clone(), bundle: bundle.clone() })
                 } else {
                     Err(PacketError::GameManagerError)
                 }
@@ -272,7 +307,14 @@ impl Handler<SendPacket> for Session {
             Packet::PlayerDone { .. } => {
                 log::info!("Player done");
                 if let Some(game_manager) = self.game_manager.as_mut() {
-                    Ok(PacketResponse::CardResultOk { card: game_manager.get_next_card().unwrap(), bundle: game_manager.bundle_state() })
+                    let card = game_manager.get_next_card().unwrap();
+                    let bundle = game_manager.bundle_state();
+
+                    for conn in self.connections.clone() {
+                        conn.do_send(SendPacket(Packet::CardResult { card: card.clone(), bundle: bundle.clone() }));
+                    }
+
+                    Ok(PacketResponse::CardResultOk { card: card.clone(), bundle: bundle.clone() })
                 } else {
                     Err(PacketError::GameManagerError)
                 }

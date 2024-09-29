@@ -143,7 +143,7 @@ pub struct RenderedScoreBoard {
 impl Default for RenderedScoreBoard {
     fn default() -> Self {
         Self {
-            ident: "".to_string(),
+            ident: "Default".to_string(),
             data: Vec::new(),
         }
     }
@@ -184,6 +184,7 @@ impl ScoreBoard {
     ) -> Result<RenderedScoreBoard, ()> {
         println!("{:#?}", self);
         let score_state = states.get(&self.state.get_ident().ok_or(())?).ok_or(())?;
+        log::info!("{:#?}", states);
         let mut score_elements: Vec<ScoreElement> = Vec::new();
         match score_state {
             StateModule::IndividualState {
@@ -279,6 +280,7 @@ impl Deck {
             table_hash.insert(table.ident, table.values);
         }
         let mut state_hash = HashMap::new();
+        println!("{:p}", &self.states);
         for state in self.states {
             if state.individual {
                 state_hash.insert(
