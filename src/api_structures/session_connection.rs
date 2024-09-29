@@ -7,6 +7,7 @@ use actix_web_actors::ws;
 use futures::executor::block_on;
 use uuid::Uuid;
 use crate::api_structures::managers::game_manager::GameBundle;
+use crate::api_structures::packet_parser::{Packet, PacketError};
 
 pub struct SessionConnection {
     session: Addr<Session>,
@@ -103,5 +104,24 @@ impl Handler<PlayerUpdate> for SessionConnection {
         ctx.text(
             serde_json::to_string(&resp ).unwrap(),
         );
+    }
+}
+
+impl Handler<SendPacket> for SessionConnection {
+    type Result = Result<PacketResponse, PacketError>;
+
+    fn handle(&mut self, msg: SendPacket, ctx: &mut Self::Context) -> Self::Result {
+       let resp = match msg.0 {
+          Packet::CardResult { card, bundle } => Ok(PacketResponse::CardResultOk { card, bundle }),
+          _ => {
+              log::error!("Unknown packet: {:?}", msg.0);
+              Err(PacketError::Errorito)
+          }
+       };
+
+       match resp {
+            Ok(resp) => {ctx.text(serde_json::to_string(&resp).unwrap()); Ok(PacketResponse::AdminTokenOk)},
+            Err(err) => Err(err),
+       }
     }
 }

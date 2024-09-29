@@ -27,6 +27,7 @@ pub struct State {
 pub enum PacketError {
     CipaChuj,
     GameManagerError,
+    Errorito,
     #[serde(skip)]
     MailboxError(MailboxError),
 }
@@ -45,10 +46,7 @@ pub enum Packet {
         new_state: GameBundle,
     },
     PlayersUpdate {},
-    CardResult {
-        state_options: Vec<CardOption>,
-        display: String,
-    },
+    CardResult { card: CardResult, #[serde(skip)] bundle: GameBundle },
     FinishGame {},
 
     // API <-> CLIENT

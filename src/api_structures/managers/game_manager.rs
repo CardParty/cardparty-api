@@ -22,7 +22,7 @@ impl Default for GameBundle {
     fn default() -> Self {
         Self {
             score_board: RenderedScoreBoard::default(),
-            current_idx: 0,
+            current_idx: 69,
             states: Vec::new(),
         }
     }
@@ -181,7 +181,7 @@ impl GameManager {
     }
 
     pub fn add_player(&mut self, id: Uuid, username: String, is_host: bool) {
-        log::info!("Adding player {:#?}", username);
+        log::info!("Adding player in game manager {:#?}", username);
         self.game_state
             .players
             .push(Player::new(id, username, is_host));
@@ -266,7 +266,7 @@ impl GameManager {
                             Some((Intermediate::Value(value), ident))
                         } else {
                             Some((
-                                Intermediate::Value("WYWYWYWYWYYW WYJEBAŁO SIE".to_string()),
+                                Intermediate::Value("Error".to_string()),
                                 ident,
                             ))
                         }
@@ -418,7 +418,8 @@ impl GameManager {
     }
 
     pub fn bundle_state(&self) -> GameBundle {
-        log::info!("Bundling state {:#?}", self.game_state.bundle_state());
-        self.game_state.bundle_state()
+        let bundle = self.game_state.bundle_state();
+        log::info!("Bundling state {:#?}", &bundle);
+        bundle
     }
 }
