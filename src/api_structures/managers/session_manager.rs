@@ -53,7 +53,7 @@ impl SessionManager {
         drop(sessions);
 
         let mut code = SessionCode::gen();
-        let mut codes = self.session_codes.lock().unwrap();
+        let mut codes = self.session_codes.lock().expect("Failed to lock sessions");
         while codes
             .keys()
             .into_iter()
