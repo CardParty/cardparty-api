@@ -1,6 +1,6 @@
 use actix::{Addr, Message};
 use uuid::Uuid;
-
+use crate::api_structures::managers::game_manager::GameBundle;
 use super::{
     id::{ SessionId, UserId},
     packet_parser::{Packet, PacketResponse},
@@ -71,4 +71,4 @@ pub struct CloseSession(pub Uuid);
 
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
-pub struct PlayerUpdate(pub Vec<String>);
+pub struct PlayerUpdate(pub Vec<String>, pub GameBundle);

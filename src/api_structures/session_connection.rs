@@ -6,6 +6,7 @@ use actix::{Actor, Addr, Handler, StreamHandler};
 use actix_web_actors::ws;
 use futures::executor::block_on;
 use uuid::Uuid;
+use crate::api_structures::managers::game_manager::GameBundle;
 
 pub struct SessionConnection {
     session: Addr<Session>,
@@ -35,12 +36,22 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Text(text)) => {
                 let packet = deserialize_json(&text);
+                log::info!("Received packet: {:?}", packet);
                 let response = block_on(async { self.session.send(SendPacket(packet)).await? });
 
                 match response {
-                    Ok(resp) => ctx.text(
-                        serde_json::to_string(&resp).expect("Failed to serialze Packet Response"),
-                    ),
+                    Ok(resp) => {
+                        log::info!("Response: {:?}", resp);
+                        ctx.text(serde_json::to_string(&resp).unwrap());
+                        match resp {
+                            PacketResponse::CloseSessionOk => {
+                                ()
+                            }
+                            _ => {
+                                ctx.text(serde_json::to_string(&PacketResponse::UpdateStateOk { bundle: resp.get_bundle().unwrap() }).unwrap());
+                            }
+                        }
+                    }
                     Err(err) => {
                         ctx.text(serde_json::to_string(&err).expect("Failed to serialize Error"));
                     }
@@ -86,8 +97,10 @@ impl Handler<PlayerUpdate> for SessionConnection {
     type Result = ();
 
     fn handle(&mut self, msg: PlayerUpdate, ctx: &mut Self::Context) -> Self::Result {
+
+        let resp = PacketResponse::PlayersUpdateOk { players: msg.0, bundle: GameBundle::default() };
         ctx.text(
-            serde_json::to_string(&PacketResponse::PlayersUpdateOk { players: msg.0 }).unwrap(),
+            serde_json::to_string(&resp ).unwrap(),
         );
     }
 }

@@ -1,10 +1,10 @@
 use actix::MailboxError;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
+use crate::api_structures::managers::game_manager::{CardResult, GameBundle};
 use super::{
     card_game::deck::Deck,
-    managers::game_manager::{CardOption, GameState},
+    managers::game_manager::CardOption,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -42,7 +42,7 @@ impl From<MailboxError> for PacketError {
 pub enum Packet {
     // API -> CLIENT
     UpdateState {
-        new_state: GameState,
+        new_state: GameBundle,
     },
     PlayersUpdate {},
     CardResult {
@@ -79,8 +79,8 @@ pub enum Packet {
 #[serde(tag = "packet")]
 pub enum PacketResponse {
     // API -> CLIENT
-    UpdateStateOk,
-    CardResultOk,
+    UpdateStateOk { bundle: GameBundle },
+    CardResultOk { card: CardResult, #[serde(skip)] bundle: GameBundle },
     FinishGameOk,
 
     // API <-> CLIENT
@@ -88,13 +88,29 @@ pub enum PacketResponse {
     TestPacketWithStringOk { string: String },
 
     // API <- CLIENT
-    SetDeckOk,
-    PlayerLeftOk,
-    PlayerDoneChoiseOk,
+    SetDeckOk { #[serde(skip)] bundle: GameBundle },
+    PlayerLeftOk { #[serde(skip)] bundle: GameBundle },
+    PlayerDoneChoiseOk { #[serde(skip)] bundle: GameBundle },
     CloseSessionOk,
-    PlayerDoneOk,
-    GetPlayersOk { players: Vec<String> },
-    PlayersUpdateOk { players: Vec<String> },
+    PlayerDoneOk { #[serde(skip)] bundle: GameBundle },
+    GetPlayersOk { players: Vec<String>,  #[serde(skip)] bundle: GameBundle },
+    PlayersUpdateOk { players: Vec<String>, #[serde(skip)] bundle: GameBundle },
+}
+
+impl PacketResponse {
+    pub fn get_bundle(&self) -> Option<GameBundle> {
+        match self {
+            PacketResponse::SetDeckOk { bundle } => Some(bundle.clone()),
+            PacketResponse::PlayerLeftOk { bundle } => Some(bundle.clone()),
+            PacketResponse::PlayerDoneChoiseOk { bundle } => Some(bundle.clone()),
+            PacketResponse::PlayerDoneOk { bundle } => Some(bundle.clone()),
+            PacketResponse::GetPlayersOk { bundle, .. } => Some(bundle.clone()),
+            PacketResponse::PlayersUpdateOk { bundle, .. } => Some(bundle.clone()),
+            PacketResponse::UpdateStateOk { bundle } => Some(bundle.clone()),
+            PacketResponse::CardResultOk { bundle, .. } => Some(bundle.clone()),
+            _ => None,
+        }
+    }
 }
 
 pub fn deserialize_json(json: &str) -> Packet {
