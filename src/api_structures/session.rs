@@ -54,8 +54,8 @@ impl Players {
     pub fn remove_player(&mut self, id: UserId) {
         self.players.retain(|x| x.id != id);
     }
-    pub fn get_players(&self) -> Vec<Player> {
-        self.players.clone()
+    pub fn get_players(&self) -> Vec<String> {
+        self.players.iter().map(|x| x.username.clone()).collect()
     }
 
     pub fn consume(&self) {
@@ -223,6 +223,10 @@ impl Handler<AddPlayer> for Session {
         self.game_manager.regen();
 
         let connection = SessionConnection::new(msg.id, msg.session_addr, msg.is_host);
+
+        for conn in &self.connections.connections {
+            conn.do_send(PlayerUpdate(self.players.borrow().get_players(), self.game_manager.bundle_state()));
+        }
 
         Ok(connection)
     }
