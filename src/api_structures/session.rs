@@ -1,3 +1,5 @@
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use super::managers::session_manager::SessionManager;
 use super::messages::{
     AddConnection, AddPlayer, CloseSession, CloseSessionConnection, GetHostId, GetSessionId,
@@ -10,6 +12,7 @@ use crate::api_structures::managers::game_manager::GameManager;
 use crate::api_structures::messages::BroadcastMessage;
 use crate::api_structures::messages::TestMessage;
 use actix::{Actor, Addr, Context, Handler};
+use chrono::format::Item;
 use rand::prelude::*;
 
 use serde::{Deserialize, Serialize};
@@ -29,8 +32,72 @@ fn generate_random_string(length: usize) -> String {
 }
 
 use uuid::Uuid;
+use crate::api_structures::card_game::deck::{Deck, Selector};
+use crate::api_structures::session::SessionState::Game;
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub enum SessionError {}
+pub struct Players {
+    pub players: Vec<Player>,
+    pub idx: Cell<usize>,
+}
+
+
+impl Players {
+    pub fn new() -> Self {
+        Self { players: Vec::new(), idx: Cell::new(0)  }
+    }
+    pub fn add_player(&mut self, player: Player) {
+        self.players.push(player);
+        self.players.shuffle(&mut thread_rng());
+    }
+
+    pub fn remove_player(&mut self, id: UserId) {
+        self.players.retain(|x| x.id != id);
+    }
+    pub fn get_players(&self) -> Vec<Player> {
+        self.players.clone()
+    }
+
+    pub fn consume(&self) {
+        self.idx.set(self.idx.get() + 1);
+    }
+
+    pub fn get_player(&self, selector: Selector) -> &Player {
+        match selector {
+            Selector::Current => &self.players[self.idx.get()],
+            Selector::Next => &self.players[(self.idx.get() + 1) % self.players.len()],
+            Selector::Previous => &self.players[(self.idx.get() - 1) % self.players.len()],
+            Selector::Random => &self.players[thread_rng().gen_range(0..self.players.len())],
+            Selector::None => self.players.first().unwrap(),
+        }
+    }
+
+    pub fn clone_player(&self, selector: Selector) -> Player {
+        match selector {
+            Selector::Current => self.players[self.idx.get()].clone(),
+            Selector::Next => self.players[(self.idx.get()  + 1) % self.players.len()].clone(),
+            Selector::Previous => self.players[(self.idx.get() - 1) % self.players.len()].clone(),
+            Selector::Random => self.players[thread_rng().gen_range(0..self.players.len())].clone(),
+            Selector::None => self.players.first().unwrap().clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Connections {
+    pub connections: Vec<Addr<SessionConnection>>,
+}
+
+impl Connections {
+    pub fn new() -> Self {
+        Self { connections: Vec::new() }
+    }
+
+    pub fn add_connection(&mut self, connection: Addr<SessionConnection>) {
+        self.connections.push(connection);
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Player {
     pub username: String,
@@ -38,13 +105,6 @@ pub struct Player {
     is_host: bool,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub enum SessionState {
-    Lobby,
-    PreGame,
-    Game,
-    PostGame,
-}
 impl Player {
     pub fn new(id: UserId, username: String, is_host: bool) -> Self {
         Self {
@@ -54,6 +114,19 @@ impl Player {
         }
     }
 }
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub enum SessionError {}
+
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub enum SessionState {
+    Lobby,
+    PreGame,
+    Game,
+    PostGame,
+}
+
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct SessionCode {
@@ -78,12 +151,11 @@ impl SessionCode {
 #[derive(Clone)]
 pub struct Session {
     pub id: SessionId,
-    pub connections: Vec<Addr<SessionConnection>>,
+    pub connections: Connections,
     pub host_id: Uuid,
-    pub players: Vec<Player>,
-    pub uncommited_players: Vec<Player>,
+    pub players: Rc<RefCell<Players>>,
     pub admin_token: Uuid,
-    pub game_manager: Option<GameManager>,
+    pub game_manager: GameManager,
     pub session_state: SessionState,
     pub manager_addr: Addr<SessionManager>,
     pub code: SessionCode,
@@ -99,42 +171,27 @@ impl Session {
         _username: String,
         manager_addr: Addr<SessionManager>,
         code: SessionCode,
+        deck: Deck,
     ) -> (Addr<Self>, SessionId) {
         let id = Uuid::new_v4();
+        let plrs = Rc::new(RefCell::new(Players::new()));
+        let plrs_clone = Rc::clone(&plrs);
+
         let addr = Self {
             id,
             host_id,
-            connections: Vec::new(),
-            players: Vec::new(),
-            uncommited_players: Vec::new(),
+            connections: Connections::new(),
+            players: plrs,
             admin_token: Uuid::new_v4(),
-            game_manager: None,
+            game_manager: GameManager::init(deck.into_bundle(), plrs_clone),
             session_state: SessionState::Lobby,
             manager_addr,
             code,
         }
-        .start();
+          .start();
 
         (addr, id)
     }
-    // pub fn add_game_manager(&mut self, deck_bundle: DeckBundle) {
-    //     self.game_manager = Some(GameManager::init(deck_bundle));
-    // }
-    // pub fn get_game_manager(self) -> GameManager {
-    //     self.game_manager.unwrap()
-    // }
-    // pub fn advance_state(&mut self) {
-    //     match self.session_state {
-    //         SessionState::Lobby => self.session_state = SessionState::PreGame,
-    //         SessionState::PreGame => self.session_state = SessionState::Game,
-    //         SessionState::Game => self.session_state = SessionState::PostGame,
-    //         SessionState::PostGame => self.session_state = SessionState::Lobby,
-    //     }
-    // }
-
-    // pub fn get_state(self) -> SessionState {
-    //     self.session_state
-    // }
 }
 
 impl Handler<TestMessage> for Session {
@@ -160,67 +217,14 @@ impl Handler<AddPlayer> for Session {
     type Result = Result<SessionConnection, SessionError>;
     fn handle(&mut self, msg: AddPlayer, _ctx: &mut Self::Context) -> Self::Result {
         log::info!("Adding player: {:#?} to session: {:#?}", msg, self.id);
-        self.players
-            .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
-        if self.players.len() == 1 {
-            let conn = SessionConnection::new(msg.id, msg.session_addr, true);
-            let players = self
-                .players
-                .iter()
-                .map(|x| x.username.clone())
-                .collect::<Vec<String>>();
-            for conn in self.connections.clone() {
-                if let Some(game_manager) = self.game_manager.as_mut() {
-                    if self.uncommited_players.is_empty() {
-                        log::info!("Sending player update emptry ucp");
-                        conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
-                    } else {
-                        for player in self.uncommited_players.drain(..) {
-                            log::info!("adding from ucp");
-                            conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
-                            game_manager.add_player(player.id, player.username.clone(), player.is_host);
-                        }
-                    }
+        let player = Player::new(msg.id, msg.username, msg.is_host);
+        self.players.borrow_mut().add_player(player);
 
-                } else {
-                    self.uncommited_players
-                      .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
-                }
+        self.game_manager.regen();
 
-                log::info!("Uncommited Pl : {:#?}", self.uncommited_players);
-                log::info!("Players: {:#?}", self.players);
-            }
-            Ok(conn)
-        } else {
-            let conn = SessionConnection::new(msg.id, msg.session_addr, false);
-            let players = self
-                .players
-                .iter()
-                .map(|x| x.username.clone())
-                .collect::<Vec<String>>();
-            for conn in self.connections.clone() {
-                if let Some(game_manager) = self.game_manager.as_mut() {
-                    if self.uncommited_players.is_empty() {
-                        log::info!("Sending player update emptry ucp");
-                        conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
-                    } else {
-                        for player in self.uncommited_players.drain(..) {
-                            log::info!("adding from ucp");
-                            conn.do_send(PlayerUpdate(players.clone(), game_manager.bundle_state()));
-                            game_manager.add_player(player.id, player.username.clone(), player.is_host);
-                        }
-                    }
+        let connection = SessionConnection::new(msg.id, msg.session_addr, msg.is_host);
 
-                } else {
-                    self.uncommited_players
-                      .push(Player::new(msg.id, msg.username.clone(), msg.is_host));
-                }
-
-                log::info!("Uncommited Pl : {:#?}", self.uncommited_players);
-                log::info!("Players: {:#?}", self.players);
-            }
-            Ok(conn)
-        }
+        Ok(connection)
     }
 }
 
@@ -234,7 +238,7 @@ impl Handler<BroadcastMessage> for Session {
     type Result = ();
 
     fn handle(&mut self, msg: BroadcastMessage, _ctx: &mut Self::Context) -> Self::Result {
-        for conn in &self.connections {
+        for conn in &self.connections.connections {
             conn.do_send(SendToClient(msg.0.clone()))
         }
     }
@@ -245,9 +249,11 @@ impl Handler<AddConnection> for Session {
 
     fn handle(&mut self, msg: AddConnection, _ctx: &mut Self::Context) -> Self::Result {
         log::info!("Adding connection: {:#?}", msg.0);
-        self.connections.push(msg.0);
+        self.connections.add_connection(msg.0);
     }
 }
+
+
 
 impl Handler<SendPacket> for Session {
     type Result = Result<PacketResponse, PacketError>;
@@ -260,68 +266,53 @@ impl Handler<SendPacket> for Session {
             Packet::TestPacketWithString { string } => {
                 Ok(PacketResponse::TestPacketWithStringOk { string })
             }
-                Packet::SetDeck { deck } => {
-                    log::info!("Setting deck: {:#?}", deck);
-                    if let Some(game_manager) = self.game_manager.as_mut() {
-                    game_manager.change_deck(deck.into_bundle());
-                    Ok(PacketResponse::SetDeckOk { bundle: game_manager.bundle_state() })
-                } else {
-                    self.game_manager = Some(GameManager::init(deck.into_bundle()));
-                        Ok(PacketResponse::SetDeckOk { bundle: self.game_manager.clone().unwrap().bundle_state() })
-                } }
+            Packet::SetDeck { deck } => {
+                log::info!("Setting deck: {:#?}", deck);
+                self.game_manager.change_deck(deck.into_bundle());
+                Ok(PacketResponse::SetDeckOk { bundle: self.game_manager.bundle_state() })
+            }
             Packet::PlayerLeft { id } => {
-                if let Some(game_manager) = self.game_manager.as_mut() {
-                game_manager.remove_player(id);
-                self.players.retain(|x| x.id != id);
-                if self.players.len() == 0 {
+                self.game_manager.remove_player(id);
+                self.players.borrow_mut().players.retain(|x| x.id != id);
+                if self.players.borrow().players.is_empty() {
                     self.session_state = SessionState::Lobby;
 
-                    for conn in &self.connections {
+                    for conn in &self.connections.connections {
                         conn.do_send(CloseSessionConnection);
                     }
                     self.manager_addr.do_send(CloseSession(self.id.clone()));
                     Ok(PacketResponse::CloseSessionOk)
                 } else {
-                    self.host_id = self.players[0].id;
-                    Ok(PacketResponse::PlayerLeftOk { bundle: game_manager.bundle_state() } )
+                    self.host_id = self.players.borrow().players[0].id;
+                    Ok(PacketResponse::PlayerLeftOk { bundle: self.game_manager.bundle_state() })
                 }
-            } else {
-                Err(PacketError::GameManagerError)
-            }}
+            }
             Packet::PlayerDoneChoise { chosen } => {
                 log::info!("Player done choise: {:#?}", chosen);
-                if let Some(game_manager) = self.game_manager.as_mut() {
-                    game_manager.resolve_state(chosen);
-                    let card = game_manager.get_next_card().unwrap();
-                    let bundle = game_manager.bundle_state();
+                self.game_manager.resolve_state(chosen);
+                let card = self.game_manager.get_next_card().unwrap();
+                let bundle = self.game_manager.bundle_state();
 
-                    for conn in self.connections.clone() {
-                        conn.do_send(SendPacket(Packet::CardResult { card: card.clone(), bundle: bundle.clone() }));
-                    }
+                for conn in self.connections.connections.clone() {
+                    conn.do_send(SendPacket(Packet::CardResult { card: card.clone(), bundle: bundle.clone() }));
+                }
 
                 Ok(PacketResponse::CardResultOk { card: card.clone(), bundle: bundle.clone() })
-                } else {
-                    Err(PacketError::GameManagerError)
-                }
             }
             Packet::PlayerDone { .. } => {
                 log::info!("Player done");
-                if let Some(game_manager) = self.game_manager.as_mut() {
-                    let card = game_manager.get_next_card().unwrap();
-                    let bundle = game_manager.bundle_state();
+                let card = self.game_manager.get_next_card().unwrap();
+                let bundle = self.game_manager.bundle_state();
 
-                    for conn in self.connections.clone() {
-                        conn.do_send(SendPacket(Packet::CardResult { card: card.clone(), bundle: bundle.clone() }));
-                    }
-
-                    Ok(PacketResponse::CardResultOk { card: card.clone(), bundle: bundle.clone() })
-                } else {
-                    Err(PacketError::GameManagerError)
+                for conn in self.connections.connections.clone() {
+                    conn.do_send(SendPacket(Packet::CardResult { card: card.clone(), bundle: bundle.clone() }));
                 }
+
+                Ok(PacketResponse::CardResultOk { card: card.clone(), bundle: bundle.clone() })
             }
             Packet::CloseSession { .. } => {
                 log::info!("Closing session: {:#?}", self.id);
-                for conn in self.connections.clone() {
+                for conn in self.connections.connections.clone() {
                     conn.do_send(CloseSessionConnection);
                 }
                 self.manager_addr.do_send(CloseSession(self.id.clone()));
