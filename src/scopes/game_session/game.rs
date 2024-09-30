@@ -105,21 +105,22 @@ async fn test_deck(context: web::Json<Deck>) -> impl Responder {
     HttpResponse::Ok().json(deck)
 }
 
-#[post("/render_cards")]
-async fn render_cards(context: web::Json<Deck>) -> impl Responder {
-    let deck = context.into_inner();
-    println!("Got Deck: {:#?}", &deck);
-    let mut manager = GameManager::init(deck.into_bundle());
-    let mut results = Vec::new();
-    for _ in 0..10 {
-        if let Some(result) = manager.get_next_card() {
-            results.push(result);
-        } else {
-            break;
-        }
-    }
-    HttpResponse::Ok().json(results)
-}
+/// depprecated
+// #[post("/render_cards")]
+// async fn render_cards(context: web::Json<Deck>) -> impl Responder {
+//     let deck = context.into_inner();
+//     println!("Got Deck: {:#?}", &deck);
+//     let mut manager = GameManager::init(deck.into_bundle());
+//     let mut results = Vec::new();
+//     for _ in 0..10 {
+//         if let Some(result) = manager.get_next_card() {
+//             results.push(result);
+//         } else {
+//             break;
+//         }
+//     }
+//     HttpResponse::Ok().json(results)
+// }
 
 async fn join_game(
     data: web::Data<Arc<Mutex<ApiState>>>,
@@ -159,5 +160,4 @@ pub fn game_scope() -> Scope {
         .service(unwrap_session_code)
         .service(get_games)
         .service(test_deck)
-        .service(render_cards)
 }
