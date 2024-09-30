@@ -36,13 +36,19 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
         match msg {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Text(text)) => {
+                
                 log::info!("Received text: {:?}", text);
                 let packet = deserialize_json(&text);
                 log::info!("Received packet: {:?}", packet);
                 let response = block_on(async { self.session.send(SendPacket(packet)).await? });
 
+                
+                
                 match response {
                     Ok(resp) => {
+                        if let PacketResponse::Unit = resp {
+                            return;
+                        }
                         log::info!("Response: {:?}", resp);
                         ctx.text(serde_json::to_string(&resp).unwrap());
                         match resp {
@@ -111,8 +117,11 @@ impl Handler<SendPacket> for SessionConnection {
     type Result = Result<PacketResponse, PacketError>;
 
     fn handle(&mut self, msg: SendPacket, ctx: &mut Self::Context) -> Self::Result {
+        
        let resp = match msg.0 {
-          Packet::CardResult { card, bundle } => Ok(PacketResponse::CardResultOk { card, bundle }),
+          Packet::CardResult { card, bundle } => Ok(PacketResponse::StartGameOk),
+           Packet::StartGame {} => Ok(PacketResponse::UpdateStateOk { bundle: GameBundle::default() }),
+           Packet::FinishGame {} => Ok(PacketResponse::FinishGameOk),
           _ => {
               log::error!("Unknown packet: {:?}", msg.0);
               Err(PacketError::Errorito)

@@ -33,6 +33,7 @@ fn generate_random_string(length: usize) -> String {
 
 use uuid::Uuid;
 use crate::api_structures::card_game::deck::{Deck, Selector};
+use crate::api_structures::packet_parser::Packet::StartGame;
 use crate::api_structures::session::SessionState::Game;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -116,7 +117,9 @@ impl Player {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub enum SessionError {}
+pub enum SessionError {
+    CantJoinActiveGame
+}
 
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -216,7 +219,19 @@ impl Handler<GetHostId> for Session {
 impl Handler<AddPlayer> for Session {
     type Result = Result<SessionConnection, SessionError>;
     fn handle(&mut self, msg: AddPlayer, _ctx: &mut Self::Context) -> Self::Result {
+
+        if let Game = self.session_state {
+            return Err(SessionError::CantJoinActiveGame);
+        }
+
         log::info!("Adding player: {:#?} to session: {:#?}", msg, self.id);
+
+        let players = &self.players.borrow().players;
+
+        if players.is_empty() {
+            self.session_state = SessionState::Lobby;
+        }
+
         let player = Player::new(msg.id, msg.username, msg.is_host);
         self.players.borrow_mut().add_player(player);
 
@@ -272,12 +287,20 @@ impl Handler<SendPacket> for Session {
             }
             Packet::SetDeck { deck } => {
                 log::info!("Setting deck: {:#?}", deck);
+                if let Game = self.session_state {
+                    return Err(PacketError::CantChangeDeck);
+                }
                 self.game_manager.change_deck(deck.into_bundle());
                 Ok(PacketResponse::SetDeckOk { bundle: self.game_manager.bundle_state() })
+            }
+            Packet::GetPlayers {  } => {
+                Ok(PacketResponse::GetPlayersOk { players: self.players.borrow().get_players(), bundle: self.game_manager.bundle_state() })
             }
             Packet::PlayerLeft { id } => {
                 self.game_manager.remove_player(id);
                 self.players.borrow_mut().players.retain(|x| x.id != id);
+                let players = self.players.borrow();
+                self.game_manager.regen_states(&players);
                 if self.players.borrow().players.is_empty() {
                     self.session_state = SessionState::Lobby;
 
@@ -321,6 +344,30 @@ impl Handler<SendPacket> for Session {
                 }
                 self.manager_addr.do_send(CloseSession(self.id.clone()));
                 Ok(PacketResponse::CloseSessionOk)
+            }
+            
+            Packet::StartGame { } => {
+                log::info!("Starting game: {:#?}", self.id);
+                self.session_state = SessionState::PreGame;
+                self.game_manager.start_game();
+
+                for conn in self.connections.connections.clone() {
+                    conn.do_send(SendPacket(StartGame {}));
+                }
+
+                Ok(PacketResponse::Unit)
+            }
+            
+            Packet::FinishGame { } => {
+                log::info!("Finishing game: {:#?}", self.id);
+                self.session_state = SessionState::Lobby;
+                self.game_manager.reset_game_state();
+                
+                for conn in self.connections.connections.clone() {
+                    conn.do_send(SendPacket(Packet::FinishGame {}));
+                }
+                
+                Ok(PacketResponse::Unit )
             }
 
             _ => {

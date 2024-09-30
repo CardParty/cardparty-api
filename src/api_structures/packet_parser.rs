@@ -28,6 +28,7 @@ pub enum PacketError {
     CipaChuj,
     GameManagerError,
     Errorito,
+    CantChangeDeck,
     #[serde(skip)]
     MailboxError(MailboxError),
 }
@@ -59,6 +60,7 @@ pub enum Packet {
     },
 
     // API <- CLIENT
+    StartGame {},
     SetDeck {
         deck: Deck,
     },
@@ -84,7 +86,8 @@ pub enum PacketResponse {
     // API <-> CLIENT
     AdminTokenOk,
     TestPacketWithStringOk { string: String },
-
+    Unit,
+    StartGameOk,
     // API <- CLIENT
     SetDeckOk { #[serde(skip)] bundle: GameBundle },
     PlayerLeftOk { #[serde(skip)] bundle: GameBundle },
