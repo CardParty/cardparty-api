@@ -7,6 +7,7 @@ use futures::future::join_all;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
+use crate::api_structures::card_game::deck::Deck;
 
 #[derive(Clone)]
 pub struct SessionManager {
@@ -36,6 +37,7 @@ impl SessionManager {
         &mut self,
         host_id: UserId,
         username: String,
+        deck: Deck,
     ) -> Result<(SessionId, SessionCode), SessionManagerError> {
         let sessions = self.sessions.lock().expect("Failed to lock sessions");
         for session in sessions.iter() {
@@ -63,7 +65,7 @@ impl SessionManager {
             code.regen();
         }
 
-        let (addr, id) = Session::init(host_id, username, man_addr, code.clone()).await;
+        let (addr, id) = Session::init(host_id, username, man_addr, code.clone(), deck).await;
 
         codes.insert(code.clone(), id);
 

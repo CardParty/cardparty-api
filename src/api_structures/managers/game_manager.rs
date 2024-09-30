@@ -1,15 +1,16 @@
+use std::cell::RefCell;
 use crate::api_structures::card_game::deck::{Action, Card, Data, DeckBundle, RenderedScoreBoard, Segment, StateModule, Value};
 use crate::api_structures::card_game::deck::{ScoreBoard, Selector};
 use crate::api_structures::id;
-use crate::api_structures::session::Player;
+use crate::api_structures::session::{Player, Players};
 use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-
+use std::rc::Rc;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,24 +122,24 @@ impl GameState {
 #[derive(Clone)]
 pub struct GameManager {
     rng: ThreadRng,
+    players: Rc<RefCell<Players>>,
     game_state: GameState,
     awaited_states: HashMap<Uuid, CardOption>,
 }
 
 impl GameManager {
-    pub fn init(bundle: DeckBundle) -> Self {
+    pub fn init(bundle: DeckBundle, players: Rc<RefCell<Players>>) -> Self {
         Self {
             rng: thread_rng(),
             game_state: GameState::new(bundle.clone()),
             awaited_states: HashMap::new(),
+            players,
         }
     }
-    pub fn next_player(&mut self) {
-        log::info!("Next player {:#?}", self.game_state.current + 1);
-        self.game_state.current += 1;
-        if self.game_state.current >= self.game_state.players.len() {
-            self.game_state.current = 0;
-        }
+    pub fn regen(&mut self) {
+        let players = self.players.clone();
+        self.regen_states(&*players.borrow());
+
     }
 
     pub fn resolve_state(&mut self, id: Uuid) {
@@ -156,7 +157,8 @@ impl GameManager {
                         }
                     }
                     _ => {
-                        let player = self.match_player(update.selector);
+                        let players = &*self.players.borrow();
+                        let player = players.get_player(update.selector);
                         let state = self.game_state.states.get_mut(&update.ident).unwrap();
                         match state {
                             StateModule::IndividualState {
@@ -180,24 +182,29 @@ impl GameManager {
         self.game_state.cards.shuffle(&mut self.rng);
     }
 
-    pub fn add_player(&mut self, id: Uuid, username: String, is_host: bool) {
-        log::info!("Adding player in game manager {:#?}", username);
-        self.game_state
-            .players
-            .push(Player::new(id, username, is_host));
+    pub fn regen_states(&mut self, players: &Players) {
 
-        for (_, v) in self.game_state.states.iter_mut() {
-            match v {
-                StateModule::IndividualState {
-                    constructor_value,
-                    map,
-                } => {
-                    map.insert(id, constructor_value.clone());
+        let player_ids: HashSet<_> = players.players.iter().map(|p| p.id).collect();
+
+
+        for (_, state) in self.game_state.states.iter_mut() {
+
+            if let StateModule::IndividualState {
+                constructor_value,
+                map,
+            } = state {
+
+                map.retain(|player_id, _| player_ids.contains(player_id));
+
+
+                for player_id in &player_ids {
+                    map.entry(*player_id).or_insert(*constructor_value);
                 }
-                _ => {}
             }
         }
     }
+
+
 
     pub fn remove_player(&mut self, id: Uuid) {
         log::info!("Removing player {:#?}", id);
@@ -212,29 +219,6 @@ impl GameManager {
                 }
                 _ => {}
             }
-        }
-    }
-
-    fn match_player(&self, selector: Selector) -> Player {
-        match selector {
-            Selector::Current => self.game_state.players[self.game_state.current].clone(),
-            Selector::Next => {
-                let next = (self.game_state.current + 1) % self.game_state.players.len();
-                self.game_state.players[next].clone()
-            }
-            Selector::Previous => {
-                let prev = if self.game_state.current == 0 {
-                    self.game_state.players.len() - 1
-                } else {
-                    self.game_state.current - 1
-                };
-                self.game_state.players[prev].clone()
-            }
-            Selector::Random => {
-                let mut rng = thread_rng();
-                self.game_state.players.choose(&mut rng).unwrap().clone()
-            }
-            Selector::None => self.game_state.players[self.game_state.current].clone(),
         }
     }
 
@@ -293,7 +277,8 @@ impl GameManager {
                             }
                         }
                         _ => {
-                            let player = self.match_player(selector);
+                            let players = self.players.borrow();
+                            let player = players.get_player(selector);
                             let state = self.game_state.states.get(&state).unwrap();
                             match state {
                                 StateModule::IndividualState {
@@ -399,7 +384,9 @@ impl GameManager {
             }
         }
 
-        self.next_player();
+        let players = self.players.borrow();
+        players.consume();
+
         log::info!("Returning card text: {:#?}", buffer.join(" "));
         log::info!("Returning card decisions: {:#?}", decisions);
         Some(CardResult {

@@ -18,6 +18,7 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 struct CreateSession {
+    deck: Deck,
     host_id: String,
     username: String,
 }
@@ -46,12 +47,13 @@ async fn create_game(
 ) -> impl Responder {
     if let Ok(host_id) = Uuid::parse_str(&context.host_id) {
         let username = context.username.clone();
+        let deck = context.deck.clone();
         let state = data.lock().expect("failed to lock state");
         let mut session_manager = state
             .session_manager
             .lock()
             .expect("failed to lock session manager");
-        match session_manager.init_session(host_id, username).await {
+        match session_manager.init_session(host_id, username, deck).await {
             Ok((id, code)) => HttpResponse::Ok().json(SessionInfo {
                 id,
                 code: code.code,
@@ -62,6 +64,8 @@ async fn create_game(
         HttpResponse::BadRequest().body("Invalid host_id")
     }
 }
+
+
 #[get("/games")]
 async fn get_games(data: web::Data<Arc<Mutex<ApiState>>>) -> impl Responder {
     let state = data.lock().expect("failed to lock state");
