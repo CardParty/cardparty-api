@@ -225,15 +225,15 @@ impl Handler<AddPlayer> for Session {
         }
 
         log::info!("Adding player: {:#?} to session: {:#?}", msg, self.id);
+        
+        let mut players = self.players.borrow_mut();
 
-        let players = &self.players.borrow().players;
-
-        if players.is_empty() {
+        if players.players.is_empty() {
             self.session_state = SessionState::Lobby;
         }
 
         let player = Player::new(msg.id, msg.username, msg.is_host);
-        self.players.borrow_mut().add_player(player);
+        players.add_player(player);
 
         self.game_manager.regen();
 
