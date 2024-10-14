@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use crate::api_structures::card_game::deck::{Action, Card, Data, DeckBundle, RenderedScoreBoard, Segment, StateModule, Value};
+use crate::api_structures::card_game::deck::{Action, Card, Data, DeckBundle, RenderedScoreBoard, Segment, StateModule, TextElement, TextInfo, Value};
 use crate::api_structures::card_game::deck::{ScoreBoard, Selector};
 use crate::api_structures::id;
 use crate::api_structures::session::{Player, Players};
@@ -61,12 +61,12 @@ pub struct CardOption {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CardResult {
     pub state_options: Vec<CardOption>,
-    pub text: String,
+    pub text: TextInfo,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct GameState {
-    players: Vec<Player>,
+    players: Rc<RefCell<Players>>,
     tables: HashMap<String, Vec<Value>>,
     states: HashMap<String, StateModule>,
     cards: Vec<Card>,
@@ -76,9 +76,9 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(bundle: DeckBundle) -> Self {
+    pub fn new(bundle: DeckBundle, players: Rc<RefCell<Players>>) -> Self {
         Self {
-            players: Vec::new(),
+            players,
             tables: bundle.tables,
             states: bundle.states,
             cards: bundle.cards,
@@ -102,7 +102,7 @@ impl GameState {
 
     pub fn bundle_state(&self) -> GameBundle {
 
-        if let Ok(score_board) = self.score_state.generate_scoreboard(self.states.clone(), self.players.clone()) {
+        if let Ok(score_board) = self.score_state.generate_scoreboard(self.states.clone(), self.players.borrow().players.clone()) {
             GameBundle {
                 score_board,
                 current_idx: self.current,
@@ -119,7 +119,7 @@ impl GameState {
 
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GameManager {
     rng: ThreadRng,
     players: Rc<RefCell<Players>>,
@@ -131,7 +131,7 @@ impl GameManager {
     pub fn init(bundle: DeckBundle, players: Rc<RefCell<Players>>) -> Self {
         Self {
             rng: thread_rng(),
-            game_state: GameState::new(bundle.clone()),
+            game_state: GameState::new(bundle.clone(), players.clone()),
             awaited_states: HashMap::new(),
             players,
         }
@@ -139,7 +139,6 @@ impl GameManager {
     pub fn regen(&mut self) {
         let players = self.players.clone();
         self.regen_states(&*players.borrow());
-
     }
 
     pub fn resolve_state(&mut self, id: Uuid) {
@@ -178,22 +177,20 @@ impl GameManager {
     }
 
     pub fn start_game(&mut self) {
-        self.game_state.players.shuffle(&mut self.rng);
         self.game_state.cards.shuffle(&mut self.rng);
     }
 
     pub fn regen_states(&mut self, players: &Players) {
-
+        log::info!("Regenerating states");
         let player_ids: HashSet<_> = players.players.iter().map(|p| p.id).collect();
-
-
+        let prnt_state = self.game_state.states.clone();
         for (_, state) in self.game_state.states.iter_mut() {
 
             if let StateModule::IndividualState {
                 constructor_value,
                 map,
             } = state {
-
+                log::info!("Regenerating state {:#?}", prnt_state);
                 map.retain(|player_id, _| player_ids.contains(player_id));
 
 
@@ -204,11 +201,8 @@ impl GameManager {
         }
     }
 
-
-
     pub fn remove_player(&mut self, id: Uuid) {
         log::info!("Removing player {:#?}", id);
-        self.game_state.players.retain(|p| p.id != id);
         for (_, v) in self.game_state.states.iter_mut() {
             match v {
                 StateModule::IndividualState {
@@ -224,13 +218,18 @@ impl GameManager {
 
     pub fn get_next_card(&mut self) -> Option<CardResult> {
         log::info!("Getting next card");
-        let mut buffer: Vec<String> = Vec::new();
+        let mut buffer: Vec<TextElement> = Vec::new();
         let mut decisions: Vec<CardOption> = Vec::new();
 
         let mut actions_cache: HashMap<String, Intermediate> = HashMap::new();
         let mut state_updates: HashMap<String, StateUpdate> = HashMap::new();
+        
+        let mut bg = String::new();
+        let mut general_text = String::new();
 
         if let Some(card) = self.game_state.cards.choose(&mut self.rng) {
+            bg = card.bg.clone();
+            general_text = card.general_text.clone();
             for action in card.actions.clone() {
                 if let Some((inter, ident)) = match action {
                     Action::GetFromTable { ident, table, tags } => {
@@ -318,12 +317,12 @@ impl GameManager {
             for segment in card.segments.clone() {
                 match segment {
                     Segment::Raw { string } => {
-                        buffer.push(string.clone());
+                        buffer.push(string);
                     }
                     Segment::Action { ident } => {
                         if let Some(inter) = actions_cache.get(&ident) {
                             if let Some(value) = inter.to_string() {
-                                buffer.push(value);
+                                buffer.push(TextElement::span {content: value, text_color:"white".to_string(), bold:false});
                             }
                         }
                     }
@@ -387,11 +386,15 @@ impl GameManager {
         let players = self.players.borrow();
         players.consume();
 
-        log::info!("Returning card text: {:#?}", buffer.join(" "));
+        log::info!("Returning card text: {:#?}", buffer);
         log::info!("Returning card decisions: {:#?}", decisions);
         Some(CardResult {
             state_options: decisions,
-            text: buffer.join(" "),
+            text: TextInfo {
+                bg,
+                general_text,
+                text: buffer,
+            },
         })
     }
     pub fn change_deck(&mut self, bundle: DeckBundle) {

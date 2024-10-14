@@ -36,6 +36,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SessionConnection
         match msg {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Text(text)) => {
+               
+                if  text == "dump" {
+                    self.session.do_send(Dump());
+                    return;
+                }
                 
                 log::info!("Received text: {:?}", text);
                 let packet = deserialize_json(&text);
