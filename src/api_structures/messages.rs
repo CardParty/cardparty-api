@@ -72,3 +72,9 @@ pub struct CloseSession(pub Uuid);
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub struct PlayerUpdate(pub Vec<String>, pub GameBundle);
+
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct Dump();
+
+

@@ -1,10 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use super::managers::session_manager::SessionManager;
-use super::messages::{
-    AddConnection, AddPlayer, CloseSession, CloseSessionConnection, GetHostId, GetSessionId,
-    PlayerUpdate, SendPacket, SendToClient, VerifyExistence,
-};
+use super::messages::{AddConnection, AddPlayer, CloseSession, CloseSessionConnection, Dump, GetHostId, GetSessionId, PlayerUpdate, SendPacket, SendToClient, VerifyExistence};
 use super::packet_parser::{Packet, PacketError, PacketResponse};
 use super::session_connection::SessionConnection;
 use crate::api_structures::id::*;
@@ -131,7 +128,7 @@ pub enum SessionState {
 }
 
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct SessionCode {
     pub code: String,
 }
@@ -151,7 +148,7 @@ impl SessionCode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Session {
     pub id: SessionId,
     pub connections: Connections,
@@ -225,15 +222,15 @@ impl Handler<AddPlayer> for Session {
         }
 
         log::info!("Adding player: {:#?} to session: {:#?}", msg, self.id);
-        
-        let mut players = self.players.borrow_mut();
 
-        if players.players.is_empty() {
-            self.session_state = SessionState::Lobby;
+        { // scoping for mutable players drop
+            let mut players = self.players.borrow_mut();
+            let player = Player::new(msg.id, msg.username, msg.is_host);
+            if players.players.is_empty() {
+                self.session_state = SessionState::Lobby;
+            }
+            players.add_player(player);
         }
-
-        let player = Player::new(msg.id, msg.username, msg.is_host);
-        players.add_player(player);
 
         self.game_manager.regen();
 
@@ -298,7 +295,12 @@ impl Handler<SendPacket> for Session {
             }
             Packet::PlayerLeft { id } => {
                 self.game_manager.remove_player(id);
-                self.players.borrow_mut().players.retain(|x| x.id != id);
+
+                { // scoping for ref mut drop
+                    let mut mut_ref = self.players.borrow_mut();
+                    mut_ref.players.retain(|x| x.id != id);
+                }
+
                 let players = self.players.borrow();
                 self.game_manager.regen_states(&players);
                 if self.players.borrow().players.is_empty() {
@@ -374,5 +376,14 @@ impl Handler<SendPacket> for Session {
                 Err(PacketError::CipaChuj)
             }
         }
+    }
+}
+
+impl Handler<Dump> for Session {
+    type Result = ();
+
+    fn handle(&mut self, _msg: Dump, _ctx: &mut Self::Context) -> Self::Result {
+        log::info!("Dumping session: {:#?}", self);
+        log::info!("GameBundle: {:#?}", self.game_manager.bundle_state());
     }
 }

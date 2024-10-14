@@ -58,7 +58,10 @@ async fn create_game(
                 id,
                 code: code.code,
             }),
-            Err(_) => HttpResponse::InternalServerError().finish(),
+            Err(err) => {
+                log::info!("{:?}", &err);
+                HttpResponse::InternalServerError().finish()
+            }
         }
     } else {
         HttpResponse::BadRequest().body("Invalid host_id")

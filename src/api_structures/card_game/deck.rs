@@ -7,6 +7,38 @@ use crate::api_structures::session::Player;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
+pub enum TextElement {
+    header {
+        content: String,
+        text_color: String,
+        bold: bool,
+    },
+    span {
+        content: String,
+        text_color: String,
+        bold: bool,
+    },
+    list {
+        content: String,
+        text_color: String,
+        bold: bool,
+    },
+    list_element {
+        content: String,
+        text_color: String,
+        bold: bool,
+    }
+
+}
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TextInfo {
+    pub bg: String,
+    pub general_text: String,
+    pub text: Vec<TextElement>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type")]
 pub enum Data {
     String { string: String },
     Integer { integer: i32 },
@@ -31,7 +63,7 @@ impl Data {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "segment")]
 pub enum Segment {
-    Raw { string: String },
+    Raw { string: TextElement },
     Action { ident: String },
 }
 
@@ -97,6 +129,8 @@ pub struct Table {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Card {
+    pub bg: String,
+    pub general_text: String,
     pub segments: Vec<Segment>,
     pub actions: Vec<Action>,
 }
